@@ -120,10 +120,7 @@ anvil --mnemonic "test test test test test test test test test test test junk"
 anvil --host 0.0.0.0 --port 8545 &
 
 # 部署合约
-forge script script/DeployRWA20.s.sol:DeployRWA20 \
-  --rpc-url ${LOCAL_RPC_URL} \
-  --private-key ${PRIVATE_KEY} \
-  --broadcast
+forge script script/DeployRWA20.s.sol:DeployRWA20 --rpc-url ${LOCAL_RPC_URL} --private-key ${PRIVATE_KEY} --broadcast
 ```
 
 ### Sepolia 测试网部署

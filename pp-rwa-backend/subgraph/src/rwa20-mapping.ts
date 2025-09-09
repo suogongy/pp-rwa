@@ -1,4 +1,4 @@
-import { BigDecimal, BigInt, Address } from "@graphprotocol/graph-ts"
+import { BigDecimal, BigInt, Address, Bytes } from "@graphprotocol/graph-ts"
 import {
   Transfer,
   TokensMinted,
@@ -22,11 +22,6 @@ export function getOrCreateToken(address: Address): Token {
   if (token == null) {
     token = new Token(address.toHexString())
     token.address = address
-    token.transfers = []
-    token.mints = []
-    token.burns = []
-    token.batchTransfers = []
-    token.whitelistUpdates = []
     token.createdAt = BigInt.zero()
     token.updatedAt = BigInt.zero()
     token.save()
@@ -146,7 +141,7 @@ export function handleBatchTransferExecuted(event: BatchTransferExecuted): void 
   let batchTransfer = new BatchTransfer(batchId)
   batchTransfer.token = token.id
   batchTransfer.from = event.params.from
-  batchTransfer.recipients = event.params.recipients
+  batchTransfer.recipients = event.params.recipients.map<Bytes>(recipient => recipient)
   batchTransfer.amounts = event.params.amounts
   batchTransfer.batchId = event.params.batchId
   batchTransfer.totalAmount = totalAmount

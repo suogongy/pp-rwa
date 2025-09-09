@@ -15,6 +15,26 @@
 
 本地开发请使用 Docker Compose 方式，详见下面的本地部署部分。
 
+## ⚠️ 重要注意事项
+
+### 1. PostgreSQL Locale 配置问题
+Graph Node 需要数据库使用 `C` locale，而不是默认的 `en_US.utf8`。如果遇到 locale 错误，请确保：
+
+- 使用 `POSTGRES_INITDB_ARGS: "--locale=C --encoding=UTF8"` 环境变量
+- 不要自动创建数据库（移除 `POSTGRES_DB` 环境变量）
+- 手动创建数据库：`createdb -U graph-node -T template0 -l C -E UTF8 graph-node`
+
+### 2. Graph Node 版本兼容性
+新版本的 Graph Node 要求：
+- 所有实体必须使用 `@entity(immutable: true)` 指令
+- 不能使用 `@derivedFrom` 指令
+- 事件签名必须与 ABI 完全匹配，包括 `indexed` 参数
+
+### 3. 部署配置
+- 本地开发使用 `mainnet` 网络（连接到本地 Anvil）
+- 确保合约地址正确配置
+- 使用正确的 IPFS 端点（默认 `http://localhost:5001`）
+
 ## 📋 The Graph 基础知识
 
 ### 什么是 The Graph？
@@ -32,204 +52,56 @@ The Graph 是一个用于索引和查询区块链数据的去中心化协议。�
 - **Mapping**: 事件处理逻辑，将区块链事件转换为结构化数据
 - **Deployment**: 将 subgraph 部署到 The Graph 网络
 
-## 🛠️ 手动配置步骤
+## 🛠️ 环境准备
 
-### 1. 安装 Graph CLI
+### 1. 安装必要工具
 
 ```bash
-# 全局安装 Graph CLI
+# 安装 Graph CLI
 npm install -g @graphprotocol/graph-cli
 
 # 验证安装
 graph --version
+
+# 确保 Docker 和 Docker Compose 已安装
+docker --version
+docker-compose --version
 ```
 
-### 2. 初始化 Subgraph 项目
+### 2. 配置文件说明
+
+项目已包含以下配置文件：
+- `subgraph-local.yaml`: 本地开发配置
+- `schema.graphql`: GraphQL schema 定义
+- `src/rwa20-mapping.ts`: 事件映射逻辑
+- `abis/RWA20.json`: 合约 ABI 文件
+
+主要配置说明：
+- 本地开发使用 `mainnet` 网络连接本地 Anvil
+- 合约地址：`0x5FbDB2315678afecb367f032d93F642f64180aa3`
+- 事件处理器：Transfer, TokensMinted, TokensBurned, BatchTransferExecuted, WhitelistUpdate
+
+### 3. 验证智能合约部署
+
+确保您的 RWA20 智能合约已部署到本地 Anvil 网络：
 
 ```bash
-# 进入 subgraph 目录
-cd pp-rwa-backend/subgraph
-
-# 初始化 subgraph (如果需要重新创建)
-# graph init --studio
+# 检查合约是否已部署
+cast call 0x5FbDB2315678afecb367f032d93F642f64180aa3 "name()" --rpc-url http://localhost:8545
 ```
 
-### 3. 配置 Subgraph YAML 文件
+如果合约未部署，请使用 Foundry 部署：
 
-#### 本地开发配置 (subgraph-local.yaml)
-
-```yaml
-specVersion: 0.0.5
-schema:
-  file: ./schema.graphql
-dataSources:
-  - kind: ethereum
-    name: RWA20
-    network: mainnet  # 本地开发使用 mainnet 网络
-    source:
-      address: "0xYourLocalContractAddress"  # 替换为您的本地合约地址
-      abi: RWA20
-      startBlock: 0
-    mapping:
-      kind: ethereum/events
-      apiVersion: 0.0.7
-      language: wasm/assemblyscript
-      entities:
-        - Token
-        - Transfer
-        - Mint
-        - Burn
-        - BatchTransfer
-        - WhitelistUpdate
-      abis:
-        - name: RWA20
-          file: ./abis/RWA20.json
-      eventHandlers:
-        - event: Transfer(indexed address,indexed address,uint256)
-          handler: handleTransfer
-        - event: TokensMinted(indexed address,uint256,bytes32)
-          handler: handleTokensMinted
-        - event: TokensBurned(indexed address,uint256,bytes32)
-          handler: handleTokensBurned
-        - event: BatchTransferExecuted(indexed address,address[],uint256[],bytes32)
-          handler: handleBatchTransferExecuted
-        - event: WhitelistUpdated(indexed address,bool)
-          handler: handleWhitelistUpdated
-      file: ./src/rwa20-mapping.ts
+```bash
+# 部署合约
+forge script script/Counter.s.sol:CounterScript --broadcast --rpc-url http://localhost:8545
 ```
 
-#### Sepolia 测试配置 (subgraph.yaml)
-
-```yaml
-specVersion: 0.0.5
-schema:
-  file: ./schema.graphql
-dataSources:
-  - kind: ethereum
-    name: RWA20
-    network: sepolia  # Sepolia 测试网
-    source:
-      address: "0xYourSepoliaContractAddress"  # 替换为您的 Sepolia 合约地址
-      abi: RWA20
-      startBlock: 0
-    mapping:
-      kind: ethereum/events
-      apiVersion: 0.0.7
-      language: wasm/assemblyscript
-      entities:
-        - Token
-        - Transfer
-        - Mint
-        - Burn
-        - BatchTransfer
-        - WhitelistUpdate
-      abis:
-        - name: RWA20
-          file: ./abis/RWA20.json
-      eventHandlers:
-        - event: Transfer(indexed address,indexed address,uint256)
-          handler: handleTransfer
-        - event: TokensMinted(indexed address,uint256,bytes32)
-          handler: handleTokensMinted
-        - event: TokensBurned(indexed address,uint256,bytes32)
-          handler: handleTokensBurned
-        - event: BatchTransferExecuted(indexed address,address[],uint256[],bytes32)
-          handler: handleBatchTransferExecuted
-        - event: WhitelistUpdated(indexed address,bool)
-          handler: handleWhitelistUpdated
-      file: ./src/rwa20-mapping.ts
-```
-
-### 4. 理解 GraphQL Schema
-
-```graphql
-# schema.graphql
-type Token @entity {
-  id: ID!
-  address: Bytes!
-  name: String!
-  symbol: String!
-  decimals: Int!
-  totalSupply: BigInt!
-  owner: Bytes!
-  isPaused: Boolean!
-  version: String!
-  transfers: [Transfer!]! @derivedFrom(field: "token")
-  mints: [Mint!]! @derivedFrom(field: "token")
-  burns: [Burn!]! @derivedFrom(field: "token")
-  batchTransfers: [BatchTransfer!]! @derivedFrom(field: "token")
-  whitelistUpdates: [WhitelistUpdate!]! @derivedFrom(field: "token")
-  createdAt: BigInt!
-  updatedAt: BigInt!
-}
-
-type Transfer @entity {
-  id: ID!
-  token: Token!
-  from: Bytes!
-  to: Bytes!
-  amount: BigInt!
-  blockNumber: BigInt!
-  transactionHash: Bytes!
-  timestamp: BigInt!
-}
-
-# ... 其他实体定义
-```
-
-### 5. 理解映射逻辑
-
-```typescript
-// src/rwa20-mapping.ts
-import { BigDecimal, BigInt, Address } from "@graphprotocol/graph-ts"
-import { Transfer, TokensMinted } from "../generated/RWA20/RWA20"
-import { Token, Transfer as TransferEntity, Mint } from "../generated/schema"
-
-// 处理 Transfer 事件
-export function handleTransfer(event: Transfer): void {
-  // 获取或创建 Token 实体
-  let token = getOrCreateToken(event.address)
-  
-  // 创建 Transfer 实体
-  let transferId = event.transaction.hash.toHexString() + "-" + event.logIndex.toString()
-  let transfer = new TransferEntity(transferId)
-  
-  // 设置字段值
-  transfer.token = token.id
-  transfer.from = event.params.from
-  transfer.to = event.params.to
-  transfer.amount = event.params.value
-  transfer.blockNumber = event.block.number
-  transfer.transactionHash = event.transaction.hash
-  transfer.timestamp = event.block.timestamp
-  
-  // 保存到存储
-  transfer.save()
-  
-  // 更新 token 的更新时间
-  token.updatedAt = event.block.timestamp
-  token.save()
-}
-
-// 辅助函数：获取或创建 Token
-function getOrCreateToken(address: Address): Token {
-  let token = Token.load(address.toHexString())
-  if (token == null) {
-    token = new Token(address.toHexString())
-    token.address = address
-    token.createdAt = BigInt.zero()
-    token.updatedAt = BigInt.zero()
-    token.save()
-  }
-  return token
-}
-```
-
-## 🚀 部署流程详解
+## 🚀 完整部署流程详解
 
 ### 本地部署（推荐）
 
-#### 1. 使用 Docker Compose 启动 Graph Node
+#### 步骤 1：启动 Graph Node 服务
 
 ```bash
 # 进入 graph-node 目录
@@ -241,56 +113,107 @@ docker-compose -f docker/docker-compose.yml up -d
 # 查看服务状态
 docker-compose -f docker/docker-compose.yml ps
 
-# 查看日志
+# 查看日志（检查是否有错误）
 docker-compose -f docker/docker-compose.yml logs -f
+```
 
-# 停止服务
+#### 步骤 2：手动创建数据库（如果需要）
+
+如果 PostgreSQL 启动后出现 locale 错误，需要手动创建数据库：
+
+```bash
+# 进入 PostgreSQL 容器
+docker exec -it rwa-postgres bash
+
+# 在容器内执行
+createdb -U graph-node -T template0 -l C -E UTF8 graph-node
+
+# 退出容器
+exit
+```
+
+#### 步骤 3：验证服务启动
+
+```bash
+# 验证 Graph Node 启动
+curl http://localhost:8000/
+
+# 应该返回：{"message": "Access deployed subgraphs by deployment ID at /subgraphs/id/<ID> or by name at /subgraphs/name/<NAME>"}
+
+# 验证 IPFS 启动
+curl http://localhost:5001/
+
+# 验证 PostgreSQL 启动
+docker exec rwa-postgres psql -U graph-node -c "\l"
+```
+
+#### 步骤 4：准备 Subgraph 项目
+
+```bash
+# 进入 subgraph 目录
+cd pp-rwa-backend/subgraph
+
+# 初始化 npm 项目（如果还没有）
+npm init -y
+
+# 安装必要依赖
+npm install @graphprotocol/graph-ts
+```
+
+#### 步骤 5：生成 AssemblyScript 代码
+
+```bash
+# 使用本地配置生成代码
+graph codegen subgraph-local.yaml
+```
+
+#### 步骤 6：构建 Subgraph
+
+```bash
+# 构建 subgraph
+graph build subgraph-local.yaml
+```
+
+#### 步骤 7：创建 Subgraph
+
+```bash
+# 在 Graph Node 中创建 subgraph
+graph create --node http://localhost:8020 pp-rwa
+```
+
+#### 步骤 8：部署 Subgraph
+
+```bash
+# 部署 subgraph（会提示输入版本标签）
+graph deploy --node http://localhost:8020 --ipfs http://localhost:5001 pp-rwa
+
+# 或者直接指定版本标签
+graph deploy --node http://localhost:8020 --ipfs http://localhost:5001 pp-rwa subgraph-local.yaml --version-label v0.0.1
+```
+
+#### 步骤 9：验证部署
+
+```bash
+# 测试 GraphQL 端点
+curl http://localhost:8000/subgraphs/name/pp-rwa
+
+# 使用 GraphQL 查询测试
+curl -X POST http://localhost:8000/subgraphs/name/pp-rwa \
+  -H "Content-Type: application/json" \
+  -d '{"query": "{ tokens { id address name symbol } }"}'
+```
+
+### 停止服务
+
+```bash
+# 停止所有服务
 docker-compose -f docker/docker-compose.yml down
 
 # 停止并删除数据（谨慎使用）
 docker-compose -f docker/docker-compose.yml down -v
 ```
 
-#### 2. 验证服务启动
-
-```bash
-# 验证 Graph Node 启动
-curl http://localhost:8000/
-
-# 验证 IPFS 启动
-curl http://localhost:5001/
-
-# 验证 PostgreSQL 启动
-curl http://localhost:5432/
-```
-
-#### 3. 生成 AssemblyScript 代码
-
-```bash
-cd subgraph
-
-# 生成代码
-graph codegen --config subgraph-local.yaml
-```
-
-#### 4. 构建 Subgraph
-
-```bash
-# 构建
-graph build --config subgraph-local.yaml
-```
-
-#### 5. 创建和部署
-
-```bash
-# 创建 subgraph
-graph create --node http://localhost:8020 pp-rwa
-
-# 部署
-graph deploy --node http://localhost:8020 pp-rwa
-```
-
-### The Graph Hosted Service 部署
+## 🌐 The Graph Hosted Service 部署
 
 #### 1. 准备工作
 
@@ -418,7 +341,76 @@ query {
 
 ### 常见问题
 
-#### 1. 代码生成失败
+#### 1. PostgreSQL Locale 错误
+
+**错误信息**：
+```
+Database does not use C locale. Please check the graph-node documentation for how to set up the database locale: database collation is `en_US.utf8` but must be `C`
+```
+
+**解决方案**：
+1. 确保 docker-compose.yml 中 PostgreSQL 配置正确：
+   ```yaml
+   environment:
+     LC_ALL: C
+     LANG: C
+     POSTGRES_INITDB_ARGS: "--locale=C --encoding=UTF8"
+   ```
+2. 移除 `POSTGRES_DB` 环境变量
+3. 手动创建数据库：
+   ```bash
+   docker exec -it rwa-postgres bash
+   createdb -U graph-node -T template0 -l C -E UTF8 graph-node
+   exit
+   ```
+
+#### 2. Graph Node 版本兼容性问题
+
+**错误信息**：
+```
+"@entity directive requires `immutable` argument"
+```
+
+**解决方案**：
+1. 更新 schema.graphql 中所有实体定义：
+   ```graphql
+   # 旧版本
+   type Token @entity {
+   
+   # 新版本
+   type Token @entity(immutable: true) {
+   ```
+2. 移除所有 `@derivedFrom` 指令
+3. 更新映射文件，移除对只读字段的直接赋值
+
+#### 3. 事件签名不匹配
+
+**错误信息**：
+```
+Event with signature 'TokensMinted(indexed address,uint256,bytes32)' not present in ABI
+```
+
+**解决方案**：
+1. 检查 ABI 文件中的实际事件签名
+2. 确保 subgraph.yaml 中的事件签名与 ABI 完全匹配
+3. 注意 `indexed` 参数的位置和数量
+
+#### 4. 网络配置问题
+
+**错误信息**：
+```
+network not supported by registrar: no network anvil found on chain ethereum
+```
+
+**解决方案**：
+1. 本地开发使用 `mainnet` 网络
+2. 确保 docker-compose.yml 中的网络配置正确：
+   ```yaml
+   environment:
+     ethereum: 'mainnet:http://host.docker.internal:8545'
+   ```
+
+#### 5. 代码生成失败
 
 ```bash
 # 错误：Cannot find module 'assemblyscript'
@@ -430,7 +422,7 @@ npm install -g assemblyscript
 ls abis/RWA20.json
 ```
 
-#### 2. 构建失败
+#### 6. 构建失败
 
 ```bash
 # 错误：TypeScript 编译错误
@@ -443,19 +435,7 @@ npm install -g yaml-lint
 yaml-lint subgraph.yaml
 ```
 
-#### 3. 部署失败
-
-```bash
-# 错误：认证失败
-# 解决：重新认证
-graph auth https://api.thegraph.com/deploy/ YOUR_NEW_TOKEN
-
-# 错误：subgraph 已存在
-# 解决：直接部署，无需重新创建
-graph deploy --node https://api.thegraph.com/deploy/ your-username/your-project-name
-```
-
-#### 4. 同步问题
+#### 7. 同步问题
 
 ```bash
 # 问题：subgraph 一直同步中
@@ -548,5 +528,34 @@ fi
 3. **事件映射编程**: 将区块链事件转换为结构化数据
 4. **部署和运维**: 完整的部署流程和故障排除
 5. **调试技能**: 解决实际问题的能力
+6. **Docker 容器化部署**: 使用 Docker Compose 管理多服务应用
+7. **数据库配置**: 理解 PostgreSQL locale 配置的重要性
+8. **版本兼容性**: 处理不同版本软件的兼容性问题
 
 这些技能对于区块链开发非常重要，也是面试中的加分项！
+
+## 📋 快速检查清单
+
+### 部署前检查
+- [ ] Docker 和 Docker Compose 已安装
+- [ ] Graph CLI 已安装 (`npm install -g @graphprotocol/graph-cli`)
+- [ ] 智能合约已部署到本地网络
+- [ ] 合约地址已正确配置在 subgraph-local.yaml 中
+- [ ] ABI 文件已更新到 abis/ 目录
+
+### 部署步骤检查
+- [ ] 启动 Docker Compose 服务
+- [ ] 验证所有服务正常运行
+- [ ] 手动创建数据库（如需要）
+- [ ] 生成 AssemblyScript 代码
+- [ ] 构建 subgraph
+- [ ] 创建 subgraph
+- [ ] 部署 subgraph
+- [ ] 验证部署成功
+
+### 故障排除检查
+- [ ] 检查 PostgreSQL locale 配置
+- [ ] 验证 Graph Node 版本兼容性
+- [ ] 确认事件签名匹配
+- [ ] 检查网络配置
+- [ ] 查看服务日志
