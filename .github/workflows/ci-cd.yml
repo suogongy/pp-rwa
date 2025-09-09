@@ -1,0 +1,174 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+
+env:
+  NODE_VERSION: '18'
+  FOUNDRY_VERSION: 'nightly'
+
+jobs:
+  test-contracts:
+    name: 测试智能合约
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: 检出代码
+      uses: actions/checkout@v4
+      
+    - name: 安装 Foundry
+      uses: foundry-rs/foundry-toolchain@v1
+      with:
+        version: ${{ env.FOUNDRY_VERSION }}
+        
+    - name: 安装依赖
+      run: |
+        cd pp-rwa-contract
+        forge install foundry-rs/forge-std --no-commit
+        
+    - name: 运行测试
+      run: |
+        cd pp-rwa-contract
+        forge test -v
+        
+    - name: 生成测试覆盖率报告
+      run: |
+        cd pp-rwa-contract
+        forge coverage --report lcov
+        
+    - name: 上传覆盖率报告
+      uses: codecov/codecov-action@v3
+      with:
+        file: ./pp-rwa-contract/lcov.info
+        flags: contracts
+        name: contract-coverage
+
+  test-frontend:
+    name: 测试前端应用
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: 检出代码
+      uses: actions/checkout@v4
+      
+    - name: 设置 Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ env.NODE_VERSION }}
+        cache: 'npm'
+        cache-dependency-path: pp-rwa-frontend/package-lock.json
+        
+    - name: 安装前端依赖
+      run: |
+        cd pp-rwa-frontend
+        npm ci
+        
+    - name: 运行 Lint 检查
+      run: |
+        cd pp-rwa-frontend
+        npm run lint
+        
+    - name: 构建前端应用
+      run: |
+        cd pp-rwa-frontend
+        npm run build
+
+  deploy-sepolia:
+    name: 部署到 Sepolia 测试网
+    runs-on: ubuntu-latest
+    needs: [test-contracts, test-frontend]
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    environment: sepolia
+    
+    steps:
+    - name: 检出代码
+      uses: actions/checkout@v4
+      
+    - name: 安装 Foundry
+      uses: foundry-rs/foundry-toolchain@v1
+      with:
+        version: ${{ env.FOUNDRY_VERSION }}
+        
+    - name: 安装依赖
+      run: |
+        cd pp-rwa-contract
+        forge install foundry-rs/forge-std --no-commit
+        
+    - name: 构建合约
+      run: |
+        cd pp-rwa-contract
+        forge build
+        
+    - name: 部署到 Sepolia
+      env:
+        SEPOLIA_RPC_URL: ${{ secrets.SEPOLIA_RPC_URL }}
+        PRIVATE_KEY: ${{ secrets.PRIVATE_KEY }}
+        ETHERSCAN_API_KEY: ${{ secrets.ETHERSCAN_API_KEY }}
+      run: |
+        ./deploy.sh sepolia
+        
+    - name: 获取合约地址
+      id: contract
+      run: |
+        ADDRESS=$(grep -o '"0x[a-fA-F0-9]\{40\}"' pp-rwa-contract/broadcast/DeployRWA20.s.sol/*/run-latest.json | head -1 | tr -d '"')
+        echo "contract_address=$ADDRESS" >> $GITHUB_OUTPUT
+        
+    - name: 更新前端配置
+      run: |
+        cd pp-rwa-frontend
+        echo "NEXT_PUBLIC_CONTRACT_ADDRESS=${{ steps.contract.outputs.contract_address }}" >> .env.production
+        
+    - name: 部署到 Vercel
+      uses: vercel/action@v1
+      with:
+        vercel-token: ${{ secrets.VERCEL_TOKEN }}
+        vercel-org-id: ${{ secrets.VERCEL_ORG_ID }}
+        vercel-project-id: ${{ secrets.VERCEL_PROJECT_ID }}
+        working-directory: ./pp-rwa-frontend
+        alias: sepolia-rwa-demo
+
+  security-audit:
+    name: 安全审计检查
+    runs-on: ubuntu-latest
+    needs: [test-contracts]
+    
+    steps:
+    - name: 检出代码
+      uses: actions/checkout@v4
+      
+    - name: 安装 Foundry
+      uses: foundry-rs/foundry-toolchain@v1
+      with:
+        version: ${{ env.FOUNDRY_VERSION }}
+        
+    - name: 运行 Slither 静态分析
+      uses: crytic/slither-action@v0.3.0
+      with:
+        target: './pp-rwa-contract/src'
+        slither-version: '0.9.8'
+        fail-on: 'medium'
+        
+    - name: 生成 Gas 报告
+      run: |
+        cd pp-rwa-contract
+        forge test --gas-report
+      continue-on-error: true
+
+  notify:
+    name: 通知
+    runs-on: ubuntu-latest
+    needs: [deploy-sepolia, security-audit]
+    if: always()
+    
+    steps:
+    - name: 发送部署状态通知
+      uses: 8398a7/action-slack@v3
+      with:
+        status: ${{ job.status }}
+        channel: '#deployments'
+        webhook_url: ${{ secrets.SLACK_WEBHOOK }}
+      env:
+        SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK }}
