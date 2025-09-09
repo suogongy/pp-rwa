@@ -90,6 +90,8 @@ logs
 build/
 generated/
 graph-node-data/
+graph-node/data/
+graph-node/docker/data/
 
 # Temporary files
 tmp/

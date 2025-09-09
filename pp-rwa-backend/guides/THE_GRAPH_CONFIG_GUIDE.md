@@ -4,6 +4,17 @@
 
 本指南详细介绍如何手动配置和部署 The Graph subgraph，帮助您理解每个步骤的原理和操作。
 
+## 📝 重要提示
+
+**推荐使用 Docker Compose**: 本项目已配置完整的 Docker Compose 环境，包含 Graph Node、IPFS 和 PostgreSQL 服务。相比手动部署，Docker Compose 提供了：
+
+- **一键启动**: 所有服务同时启动，自动处理依赖关系
+- **数据持久化**: 数据存储在本地卷中，重启后数据不丢失
+- **简化管理**: 统一的启动、停止、日志查看命令
+- **环境一致性**: 确保开发和生产环境的一致性
+
+本地开发请使用 Docker Compose 方式，详见下面的本地部署部分。
+
 ## 📋 The Graph 基础知识
 
 ### 什么是 The Graph？
@@ -216,46 +227,44 @@ function getOrCreateToken(address: Address): Token {
 
 ## 🚀 部署流程详解
 
-### 本地部署（可选）
+### 本地部署（推荐）
 
-#### 1. 启动本地 Graph Node
+#### 1. 使用 Docker Compose 启动 Graph Node
 
 ```bash
-# 使用 Docker 启动 (Linux/Mac)
-docker run -d \
-  --name graph-node \
-  -p 8000:8000 \
-  -p 8001:8001 \
-  -p 8020:8020 \
-  -p 8030:8030 \
-  -p 8040:8040 \
-  graphprotocol/graph-node
+# 进入 graph-node 目录
+cd pp-rwa-backend/graph-node
 
-# 使用 Docker 启动 (Windows PowerShell)
-docker run -d `
-  --name graph-node `
-  -p 8000:8000 `
-  -p 8001:8001 `
-  -p 8020:8020 `
-  -p 8030:8030 `
-  -p 8040:8040 `
-  graphprotocol/graph-node
+# 启动所有服务（Graph Node + IPFS + PostgreSQL）
+docker-compose -f docker/docker-compose.yml up -d
 
-# 使用 Docker 启动 (Windows CMD)
-docker run -d ^
-  --name graph-node ^
-  -p 8000:8000 ^
-  -p 8001:8001 ^
-  -p 8020:8020 ^
-  -p 8030:8030 ^
-  -p 8040:8040 ^
-  graphprotocol/graph-node
+# 查看服务状态
+docker-compose -f docker/docker-compose.yml ps
 
-# 验证启动
-curl http://localhost:8000/
+# 查看日志
+docker-compose -f docker/docker-compose.yml logs -f
+
+# 停止服务
+docker-compose -f docker/docker-compose.yml down
+
+# 停止并删除数据（谨慎使用）
+docker-compose -f docker/docker-compose.yml down -v
 ```
 
-#### 2. 生成 AssemblyScript 代码
+#### 2. 验证服务启动
+
+```bash
+# 验证 Graph Node 启动
+curl http://localhost:8000/
+
+# 验证 IPFS 启动
+curl http://localhost:5001/
+
+# 验证 PostgreSQL 启动
+curl http://localhost:5432/
+```
+
+#### 3. 生成 AssemblyScript 代码
 
 ```bash
 cd subgraph
@@ -264,14 +273,14 @@ cd subgraph
 graph codegen --config subgraph-local.yaml
 ```
 
-#### 3. 构建 Subgraph
+#### 4. 构建 Subgraph
 
 ```bash
 # 构建
 graph build --config subgraph-local.yaml
 ```
 
-#### 4. 创建和部署
+#### 5. 创建和部署
 
 ```bash
 # 创建 subgraph
@@ -462,11 +471,20 @@ graph deploy --node https://api.thegraph.com/deploy/ your-username/your-project-
 #### 1. 使用 Graph Node 日志
 
 ```bash
-# 查看 Graph Node 日志
-docker logs graph-node
+# 使用 Docker Compose 查看所有服务日志
+docker-compose -f docker/docker-compose.yml logs
 
 # 实时查看日志
-docker logs -f graph-node
+docker-compose -f docker/docker-compose.yml logs -f
+
+# 查看特定服务日志
+docker-compose -f docker/docker-compose.yml logs graph-node
+docker-compose -f docker/docker-compose.yml logs ipfs
+docker-compose -f docker/docker-compose.yml logs postgres
+
+# 使用原生 Docker 命令查看日志
+docker logs rwa-graph-node
+docker logs -f rwa-graph-node
 ```
 
 #### 2. 本地测试
