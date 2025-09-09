@@ -1,0 +1,87 @@
+type Token @entity {
+  id: ID!
+  address: Bytes!
+  name: String!
+  symbol: String!
+  decimals: Int!
+  totalSupply: BigInt!
+  owner: Bytes!
+  isPaused: Boolean!
+  version: String!
+  transfers: [Transfer!]! @derivedFrom(field: "token")
+  mints: [Mint!]! @derivedFrom(field: "token")
+  burns: [Burn!]! @derivedFrom(field: "token")
+  batchTransfers: [BatchTransfer!]! @derivedFrom(field: "token")
+  whitelistUpdates: [WhitelistUpdate!]! @derivedFrom(field: "token")
+  createdAt: BigInt!
+  updatedAt: BigInt!
+}
+
+type Transfer @entity {
+  id: ID!
+  token: Token!
+  from: Bytes!
+  to: Bytes!
+  amount: BigInt!
+  blockNumber: BigInt!
+  transactionHash: Bytes!
+  timestamp: BigInt!
+}
+
+type Mint @entity {
+  id: ID!
+  token: Token!
+  to: Bytes!
+  amount: BigInt!
+  txId: Bytes!
+  blockNumber: BigInt!
+  transactionHash: Bytes!
+  timestamp: BigInt!
+}
+
+type Burn @entity {
+  id: ID!
+  token: Token!
+  from: Bytes!
+  amount: BigInt!
+  txId: Bytes!
+  blockNumber: BigInt!
+  transactionHash: Bytes!
+  timestamp: BigInt!
+}
+
+type BatchTransfer @entity {
+  id: ID!
+  token: Token!
+  from: Bytes!
+  recipients: [Bytes!]!
+  amounts: [BigInt!]!
+  batchId: Bytes!
+  totalAmount: BigInt!
+  blockNumber: BigInt!
+  transactionHash: Bytes!
+  timestamp: BigInt!
+}
+
+type WhitelistUpdate @entity {
+  id: ID!
+  token: Token!
+  account: Bytes!
+  status: Boolean!
+  blockNumber: BigInt!
+  transactionHash: Bytes!
+  timestamp: BigInt!
+}
+
+type Account @entity {
+  id: ID!
+  address: Bytes!
+  transfersFrom: [Transfer!]! @derivedFrom(field: "from")
+  transfersTo: [Transfer!]! @derivedFrom(field: "to")
+  mintsReceived: [Mint!]! @derivedFrom(field: "to")
+  burnsFrom: [Burn!]! @derivedFrom(field: "from")
+  batchTransfersFrom: [BatchTransfer!]! @derivedFrom(field: "from")
+  whitelistUpdates: [WhitelistUpdate!]! @derivedFrom(field: "account")
+  createdAt: BigInt!
+  updatedAt: BigInt!
+}
