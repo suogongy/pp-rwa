@@ -57,8 +57,14 @@ services:
     environment:
       POSTGRES_USER: graph-node
       POSTGRES_PASSWORD: let-me-in
-      POSTGRES_DB: graph-node
+      # 不自动创建数据库，我们手动创建
+      # POSTGRES_DB: graph-node
       PGDATA: "/var/lib/postgresql/data"
+      # 设置 locale 为 C，以满足 Graph Node 要求
+      LC_ALL: C
+      LANG: C
+      # 设置初始化参数
+      POSTGRES_INITDB_ARGS: "--locale=C --encoding=UTF8"
     volumes:
       - ./data/postgres:/var/lib/postgresql/data
     networks:

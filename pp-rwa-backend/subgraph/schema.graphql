@@ -1,4 +1,4 @@
-type Token @entity {
+type Token @entity(immutable: true) {
   id: ID!
   address: Bytes!
   name: String!
@@ -17,7 +17,7 @@ type Token @entity {
   updatedAt: BigInt!
 }
 
-type Transfer @entity {
+type Transfer @entity(immutable: true) {
   id: ID!
   token: Token!
   from: Bytes!
@@ -28,7 +28,7 @@ type Transfer @entity {
   timestamp: BigInt!
 }
 
-type Mint @entity {
+type Mint @entity(immutable: true) {
   id: ID!
   token: Token!
   to: Bytes!
@@ -39,7 +39,7 @@ type Mint @entity {
   timestamp: BigInt!
 }
 
-type Burn @entity {
+type Burn @entity(immutable: true) {
   id: ID!
   token: Token!
   from: Bytes!
@@ -50,7 +50,7 @@ type Burn @entity {
   timestamp: BigInt!
 }
 
-type BatchTransfer @entity {
+type BatchTransfer @entity(immutable: true) {
   id: ID!
   token: Token!
   from: Bytes!
@@ -63,7 +63,7 @@ type BatchTransfer @entity {
   timestamp: BigInt!
 }
 
-type WhitelistUpdate @entity {
+type WhitelistUpdate @entity(immutable: true) {
   id: ID!
   token: Token!
   account: Bytes!
@@ -73,15 +73,15 @@ type WhitelistUpdate @entity {
   timestamp: BigInt!
 }
 
-type Account @entity {
+type Account @entity(immutable: true) {
   id: ID!
   address: Bytes!
-  transfersFrom: [Transfer!]! @derivedFrom(field: "from")
-  transfersTo: [Transfer!]! @derivedFrom(field: "to")
-  mintsReceived: [Mint!]! @derivedFrom(field: "to")
-  burnsFrom: [Burn!]! @derivedFrom(field: "from")
-  batchTransfersFrom: [BatchTransfer!]! @derivedFrom(field: "from")
-  whitelistUpdates: [WhitelistUpdate!]! @derivedFrom(field: "account")
+  transfersFrom: [Transfer!]!
+  transfersTo: [Transfer!]!
+  mintsReceived: [Mint!]!
+  burnsFrom: [Burn!]!
+  batchTransfersFrom: [BatchTransfer!]!
+  whitelistUpdates: [WhitelistUpdate!]!
   createdAt: BigInt!
   updatedAt: BigInt!
 }

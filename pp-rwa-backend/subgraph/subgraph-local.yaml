@@ -37,15 +37,15 @@
             "handler": "handleTransfer"
           },
           {
-            "event": "TokensMinted(indexed address,uint256,bytes32)",
+            "event": "TokensMinted(indexed address,uint256,indexed bytes32)",
             "handler": "handleTokensMinted"
           },
           {
-            "event": "TokensBurned(indexed address,uint256,bytes32)",
+            "event": "TokensBurned(indexed address,uint256,indexed bytes32)",
             "handler": "handleTokensBurned"
           },
           {
-            "event": "BatchTransferExecuted(indexed address,address[],uint256[],bytes32)",
+            "event": "BatchTransferExecuted(indexed address,address[],uint256[],indexed bytes32)",
             "handler": "handleBatchTransferExecuted"
           },
           {
