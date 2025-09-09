@@ -633,7 +633,7 @@ export const RWA20_ABI = [
 ] as const
 
 // 合约地址 - 需要根据实际部署情况更新
-export const RWA20_ADDRESS = '0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512' // 本地anvil地址，部署后请替换为实际地址
+export const RWA20_ADDRESS = '0x5FbDB2315678afecb367f032d93F642f64180aa3' // 本地anvil地址，部署后请替换为实际地址
 
 // 合约配置对象
 export const rwa20Contract = {

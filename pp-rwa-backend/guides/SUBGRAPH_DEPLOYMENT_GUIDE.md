@@ -58,26 +58,7 @@ cat abis/RWA20.json | jq '.abi[] | select(.type == "event") | .name'
 
 ```bash
 # 启动 Graph Node
-docker run -d \
-  --name graph-node \
-  -p 8000:8000 \
-  -p 8001:8001 \
-  -p 8020:8020 \
-  -p 8030:8030 \
-  -p 8040:8040 \
-  graphprotocol/graph-node
-
-# 等待启动完成
-sleep 10
-
-# 验证 Graph Node 运行状态
-curl http://localhost:8000/
-
-# 预期响应：
-# {
-#   "subgraphs": [],
-#   "version": "0.28.0"
-# }
+参考
 ```
 
 #### 步骤 1.2: 配置本地 subgraph
@@ -106,7 +87,7 @@ dataSources:
 
 ```bash
 # 生成代码
-graph codegen --config subgraph-local-deploy.yaml
+graph codegen subgraph-local.yaml
 
 # 验证生成的文件
 ls -la generated/
@@ -120,7 +101,7 @@ cat generated/RWA20.ts | grep "export class" | grep "Event"
 
 ```bash
 # 构建 subgraph
-graph build --config subgraph-local-deploy.yaml
+graph build  subgraph-local.yaml
 
 # 验证构建结果
 ls -la build/

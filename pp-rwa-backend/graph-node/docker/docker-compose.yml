@@ -25,7 +25,7 @@ services:
       postgres_db: graph-node
       ipfs: 'ipfs:5001'
       # 连接到本地Anvil
-      ethereum: 'mainnet:http://host.docker.internal:8545'
+      ethereum: 'anvil:http://host.docker.internal:8545'
       # 基本日志配置
       GRAPH_LOG: info
       RUST_LOG: info

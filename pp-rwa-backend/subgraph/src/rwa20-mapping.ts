@@ -6,6 +6,7 @@ import {
   BatchTransferExecuted,
   WhitelistUpdated
 } from "../generated/RWA20/RWA20"
+import { RWA20 } from "../generated/RWA20/RWA20"
 import {
   Token,
   Transfer as TransferEntity,
@@ -22,6 +23,27 @@ export function getOrCreateToken(address: Address): Token {
   if (token == null) {
     token = new Token(address.toHexString())
     token.address = address
+    
+    // Bind the contract to get token information
+    let contract = RWA20.bind(address)
+    
+    // Get token information from contract
+    let nameResult = contract.try_name()
+    let symbolResult = contract.try_symbol()
+    let decimalsResult = contract.try_decimals()
+    let totalSupplyResult = contract.try_totalSupply()
+    let ownerResult = contract.try_owner()
+    let versionResult = contract.try_version()
+    
+    // Set token fields with fallback values
+    token.name = nameResult.reverted ? "Unknown Token" : nameResult.value
+    token.symbol = symbolResult.reverted ? "UNKNOWN" : symbolResult.value
+    token.decimals = decimalsResult.reverted ? 18 : decimalsResult.value
+    token.totalSupply = totalSupplyResult.reverted ? BigInt.zero() : totalSupplyResult.value
+    token.owner = ownerResult.reverted ? address : ownerResult.value
+    token.isPaused = false // Default to not paused
+    token.version = versionResult.reverted ? "1.0.0" : versionResult.value
+    
     token.createdAt = BigInt.zero()
     token.updatedAt = BigInt.zero()
     token.save()

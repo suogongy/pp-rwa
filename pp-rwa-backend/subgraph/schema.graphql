@@ -1,4 +1,4 @@
-type Token @entity(immutable: true) {
+type Token @entity {
   id: ID!
   address: Bytes!
   name: String!
@@ -39,7 +39,7 @@ type Mint @entity(immutable: true) {
   timestamp: BigInt!
 }
 
-type Burn @entity(immutable: true) {
+type Burn @entity {
   id: ID!
   token: Token!
   from: Bytes!
@@ -50,7 +50,7 @@ type Burn @entity(immutable: true) {
   timestamp: BigInt!
 }
 
-type BatchTransfer @entity(immutable: true) {
+type BatchTransfer @entity {
   id: ID!
   token: Token!
   from: Bytes!

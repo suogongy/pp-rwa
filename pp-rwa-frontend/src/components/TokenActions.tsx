@@ -239,7 +239,7 @@ export function TokenActions({ address }: TokenActionsProps) {
     setErrors(prev => ({ ...prev, query: undefined }))
     
     // 执行查询
-    refetchBalance()
+    refetchQueriedBalance()
     console.log('✅ 余额查询已发起')
   }
 
