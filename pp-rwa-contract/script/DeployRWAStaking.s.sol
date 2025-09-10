@@ -9,28 +9,22 @@ contract DeployRWAStaking is Script {
     function run() external {
         uint256 deployerPrivateKey = vm.envUint("PRIVATE_KEY");
         address deployerAddress = vm.addr(deployerPrivateKey);
-        
+
         console.log("Deploying contracts from address:", deployerAddress);
-        
+
         vm.startBroadcast(deployerPrivateKey);
-        
-        // Get existing RWA20 contract address or deploy new one
-        address tokenAddress = vm.envAddress("RWA20_ADDRESS");
-        RWA20 token;
-        
+
+        // Get existing RWA20 contract address from environment variable or hardcode for local testing
+        address tokenAddress = address(0x5FbDB2315678afecb367f032d93F642f64180aa3);
+
+        //如果没有提供rwa20地址，则部署异常
         if (tokenAddress == address(0)) {
-            console.log("No RWA20 address provided, deploying new RWA20 contract...");
-            token = new RWA20("Real World Asset Token", "RWA", deployerAddress);
-            tokenAddress = address(token);
-            console.log("RWA20 deployed to:", tokenAddress);
-        } else {
-            console.log("Using existing RWA20 at:", tokenAddress);
-            token = RWA20(tokenAddress);
+            revert("No RWA20 address provided");
         }
-        
+
         // Deploy RWAStaking contract
         RWAStaking staking = new RWAStaking(tokenAddress, tokenAddress, deployerAddress);
-        
+
         console.log("RWAStaking deployed to:");
         console.logAddress(address(staking));
         console.log("Staking Token Address:");
@@ -39,9 +33,9 @@ contract DeployRWAStaking is Script {
         console.logAddress(address(staking.rewardToken()));
         console.log("Owner:");
         console.logAddress(staking.owner());
-        
+
         vm.stopBroadcast();
-        
+
         // Log deployment info for easy integration
         console.log("\n=== Deployment Summary ===");
         console.logString("Network: local");

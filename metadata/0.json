@@ -1,0 +1,15 @@
+{
+  "name": "RWA721 #0",
+  "description": "This is the first NFT of the Real World Asset collection.",
+  "image": "http://127.0.0.1:8080/ipfs/QmP9MzswAnqQWjzLC9zNh15VRRZGZTTpk2d2uvbgK6tYVR",
+  "attributes": [
+    {
+      "trait_type": "Category",
+      "value": "Real World Asset"
+    },
+    {
+      "trait_type": "Rarity",
+      "value": "Unique"
+    }
+  ]
+}

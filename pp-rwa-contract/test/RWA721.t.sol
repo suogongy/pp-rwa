@@ -25,7 +25,7 @@ contract RWA721Test is Test {
     function test_MintNFT() public {
         vm.prank(owner);
         uint256 tokenId = nft.mintNFT(user1, "https://example.com/token/1");
-        
+
         assertEq(tokenId, 0); // First token should have ID 0
         assertEq(nft.balanceOf(user1), 1);
         assertEq(nft.ownerOf(0), user1);
@@ -38,10 +38,10 @@ contract RWA721Test is Test {
         tokenURIs[0] = "https://example.com/token/1";
         tokenURIs[1] = "https://example.com/token/2";
         tokenURIs[2] = "https://example.com/token/3";
-        
+
         vm.prank(owner);
         uint256[] memory tokenIds = nft.mintBatchNFTs(user1, tokenURIs);
-        
+
         assertEq(tokenIds.length, 3);
         assertEq(nft.balanceOf(user1), 3);
         assertEq(tokenIds[0], 0);
@@ -52,28 +52,28 @@ contract RWA721Test is Test {
     function test_BurnNFT() public {
         vm.prank(owner);
         uint256 tokenId = nft.mintNFT(user1, "https://example.com/token/1");
-        
+
         vm.prank(user1);
         nft.burn(tokenId);
-        
+
         assertEq(nft.balanceOf(user1), 0);
     }
 
     function test_SetBaseURI() public {
         vm.prank(owner);
         uint256 tokenId = nft.mintNFT(user1, "https://example.com/token/1");
-        
+
         vm.prank(owner);
         nft.setBaseURI("https://new-example.com/token/");
-        
+
         // Since we use _setTokenURI in mint, the baseURI change affects all tokens
         // because ERC721URIStorage concatenates baseURI with the stored tokenURI
         vm.prank(owner);
         uint256 newTokenId = nft.mintNFT(user1, "https://example.com/token/2");
-        
+
         // First token now uses the new base URI
         assertEq(nft.tokenURI(tokenId), "https://new-example.com/token/https://example.com/token/1");
-        
+
         // New token uses the new base URI
         assertEq(nft.tokenURI(newTokenId), "https://new-example.com/token/https://example.com/token/2");
     }
@@ -81,10 +81,10 @@ contract RWA721Test is Test {
     function test_TransferNFT() public {
         vm.prank(owner);
         uint256 tokenId = nft.mintNFT(user1, "https://example.com/token/1");
-        
+
         vm.prank(user1);
         nft.transferFrom(user1, user2, tokenId);
-        
+
         assertEq(nft.balanceOf(user1), 0);
         assertEq(nft.balanceOf(user2), 1);
         assertEq(nft.ownerOf(tokenId), user2);
@@ -93,15 +93,15 @@ contract RWA721Test is Test {
     function test_ApproveAndTransferFrom() public {
         vm.prank(owner);
         uint256 tokenId = nft.mintNFT(user1, "https://example.com/token/1");
-        
+
         vm.prank(user1);
         nft.approve(user2, tokenId);
-        
+
         assertTrue(nft.getApproved(tokenId) == user2);
-        
+
         vm.prank(user2);
         nft.transferFrom(user1, user2, tokenId);
-        
+
         assertEq(nft.balanceOf(user1), 0);
         assertEq(nft.balanceOf(user2), 1);
         assertEq(nft.ownerOf(tokenId), user2);
@@ -110,12 +110,12 @@ contract RWA721Test is Test {
     function test_Pause() public {
         vm.prank(owner);
         uint256 tokenId = nft.mintNFT(user1, "https://example.com/token/1");
-        
+
         vm.prank(owner);
         nft.pause();
-        
+
         assertTrue(nft.paused());
-        
+
         vm.expectRevert("EnforcedPause()");
         vm.prank(user1);
         nft.transferFrom(user1, user2, tokenId);
@@ -124,18 +124,18 @@ contract RWA721Test is Test {
     function test_Unpause() public {
         vm.prank(owner);
         uint256 tokenId = nft.mintNFT(user1, "https://example.com/token/1");
-        
+
         vm.prank(owner);
         nft.pause();
-        
+
         vm.prank(owner);
         nft.unpause();
-        
+
         assertFalse(nft.paused());
-        
+
         vm.prank(user1);
         nft.transferFrom(user1, user2, tokenId);
-        
+
         assertEq(nft.balanceOf(user1), 0);
         assertEq(nft.balanceOf(user2), 1);
     }
@@ -166,7 +166,7 @@ contract RWA721Test is Test {
     function test_BurnNotOwner() public {
         vm.prank(owner);
         uint256 tokenId = nft.mintNFT(user1, "https://example.com/token/1");
-        
+
         vm.expectRevert("ERC721InsufficientApproval(0x0000000000000000000000000000000000009ABc, 0)");
         vm.prank(user2);
         nft.burn(tokenId);
@@ -177,9 +177,9 @@ contract RWA721Test is Test {
         uint256 gasStart = gasleft();
         nft.mintNFT(user1, "https://example.com/token/1");
         uint256 gasUsed = gasStart - gasleft();
-        
+
         console.log("Gas used for mint:", gasUsed);
-        
+
         assertTrue(gasUsed < 200000, "Mint should use less than 200,000 gas");
     }
 }
