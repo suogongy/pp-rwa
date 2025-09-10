@@ -3,6 +3,7 @@
 import { useAccount } from 'wagmi'
 import { WalletConnect } from '@/components/WalletConnect'
 import { TokenActions } from '@/components/TokenActions'
+import { Navigation } from '@/components/Navigation'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { useState, useEffect } from 'react'
 
@@ -29,14 +30,16 @@ export default function Home() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
       <div className="container mx-auto px-4 py-8">
-        <header className="text-center mb-12">
+        <header className="text-center mb-8">
           <h1 className="text-4xl font-bold text-gray-900 mb-4">
-            RWA 代币系统
+            第一阶段：核心基础
           </h1>
           <p className="text-xl text-gray-600">
-            现实世界资产代币化演示平台
+            ERC-20代币系统
           </p>
         </header>
+
+        <Navigation />
 
         <main className="max-w-6xl mx-auto">
           {!isConnected ? (
