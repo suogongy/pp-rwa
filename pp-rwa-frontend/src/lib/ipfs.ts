@@ -24,15 +24,17 @@ export interface UploadResult {
 }
 
 /**
- * IPFS 客户端类
+ * IPFS 客户端类 - 支持本地IPFS节点
  */
 export class IPFSClient {
   private apiUrl: string
-  private apiKey?: string
+  private gatewayUrl: string
+  private isLocal: boolean
 
-  constructor(apiUrl: string = 'https://api.pinata.cloud', apiKey?: string) {
+  constructor(apiUrl: string = '/api/ipfs', gatewayUrl: string = 'http://localhost:8080') {
     this.apiUrl = apiUrl
-    this.apiKey = apiKey
+    this.gatewayUrl = gatewayUrl
+    this.isLocal = true // 使用代理，总是认为是本地模式
   }
 
   /**
@@ -42,37 +44,45 @@ export class IPFSClient {
    */
   async uploadMetadata(metadata: NFTMetadata): Promise<UploadResult> {
     try {
-      const response = await fetch(`${this.apiUrl}/pinning/pinJSONToIPFS`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${this.apiKey}`
-        },
-        body: JSON.stringify({
-          pinataMetadata: {
-            name: metadata.name,
-            keyvalues: {
-              type: 'nft-metadata',
-              project: 'rwa-tokenization'
-            }
-          },
-          pinataContent: metadata
+      // 本地IPFS节点使用 /api/v0/add 端点上传JSON
+      if (this.isLocal) {
+        const blob = new Blob([JSON.stringify(metadata)], { type: 'application/json' })
+        const formData = new FormData()
+        formData.append('file', blob, 'metadata.json')
+
+        // 使用完整的代理路径
+        const response = await fetch(`${this.apiUrl}/add?pin=true`, {
+          method: 'POST',
+          mode: 'cors',
+          body: formData
         })
-      })
 
-      const data = await response.json()
+        if (!response.ok) {
+          const errorText = await response.text()
+          throw new Error(`HTTP ${response.status}: ${errorText || '元数据上传失败'}`)
+        }
 
-      if (data.error) {
-        throw new Error(data.error)
-      }
+        const data = await response.json()
 
-      return {
-        success: true,
-        cid: data.IpfsHash,
-        url: `ipfs://${data.IpfsHash}`
+        if (data.Error) {
+          throw new Error(data.Error)
+        }
+
+        if (!data.Hash) {
+          throw new Error('元数据上传成功但未收到CID')
+        }
+
+        return {
+          success: true,
+          cid: data.Hash,
+          url: `ipfs://${data.Hash}`
+        }
+      } else {
+        // 第三方服务（如Pinata）的逻辑保持兼容
+        throw new Error('暂不支持第三方IPFS服务，请使用本地IPFS节点')
       }
     } catch (error) {
-      console.error('IPFS上传失败:', error)
+      console.error('IPFS元数据上传失败:', error)
       return {
         success: false,
         error: error instanceof Error ? error.message : '未知错误'
@@ -87,37 +97,53 @@ export class IPFSClient {
    */
   async uploadFile(file: File): Promise<UploadResult> {
     try {
-      const formData = new FormData()
-      formData.append('file', file)
-      
-      const metadata = JSON.stringify({
-        name: file.name,
-        keyvalues: {
-          type: 'nft-image',
-          project: 'rwa-tokenization'
-        }
-      })
-      
-      formData.append('pinataMetadata', metadata)
-
-      const response = await fetch(`${this.apiUrl}/pinning/pinFileToIPFS`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${this.apiKey}`
-        },
-        body: formData
-      })
-
-      const data = await response.json()
-
-      if (data.error) {
-        throw new Error(data.error)
+      // 检查文件大小
+      const maxSize = 10 * 1024 * 1024 // 10MB
+      if (file.size > maxSize) {
+        throw new Error(`文件大小超过限制 (最大 ${maxSize / 1024 / 1024}MB)`)
       }
 
-      return {
-        success: true,
-        cid: data.IpfsHash,
-        url: `ipfs://${data.IpfsHash}`
+      // 检查文件类型
+      const allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp']
+      if (!allowedTypes.includes(file.type)) {
+        throw new Error('不支持的文件类型，请使用 JPEG、PNG、GIF 或 WebP 格式')
+      }
+
+      // 本地IPFS节点使用 /api/v0/add 端点
+      if (this.isLocal) {
+        const formData = new FormData()
+        formData.append('file', file)
+
+        // 使用完整的代理路径
+        const response = await fetch(`${this.apiUrl}/add?pin=true`, {
+          method: 'POST',
+          mode: 'cors',
+          body: formData
+        })
+
+        if (!response.ok) {
+          const errorText = await response.text()
+          throw new Error(`HTTP ${response.status}: ${errorText || '文件上传失败'}`)
+        }
+
+        const data = await response.json()
+
+        if (data.Error) {
+          throw new Error(data.Error)
+        }
+
+        if (!data.Hash) {
+          throw new Error('文件上传成功但未收到CID')
+        }
+
+        return {
+          success: true,
+          cid: data.Hash,
+          url: `ipfs://${data.Hash}`
+        }
+      } else {
+        // 第三方服务（如Pinata）的逻辑保持兼容
+        throw new Error('暂不支持第三方IPFS服务，请使用本地IPFS节点')
       }
     } catch (error) {
       console.error('文件上传失败:', error)
@@ -135,11 +161,25 @@ export class IPFSClient {
    */
   async fetchFromIPFS<T>(cid: string): Promise<T | null> {
     try {
-      const response = await fetch(`https://gateway.pinata.cloud/ipfs/${cid}`)
-      if (!response.ok) {
-        throw new Error('获取数据失败')
+      // 优先使用本地IPFS API获取数据
+      if (this.isLocal) {
+        // 使用完整的代理路径
+        const response = await fetch(`${this.apiUrl}/cat?arg=${cid}`, {
+          method: 'POST'
+        })
+        if (!response.ok) {
+          const errorText = await response.text()
+          throw new Error(`获取数据失败: ${errorText}`)
+        }
+        return await response.json()
+      } else {
+        // 使用网关获取数据
+        const response = await fetch(`${this.gatewayUrl}/ipfs/${cid}`)
+        if (!response.ok) {
+          throw new Error('获取数据失败')
+        }
+        return await response.json()
       }
-      return await response.json()
     } catch (error) {
       console.error('从IPFS获取数据失败:', error)
       return null
@@ -236,8 +276,8 @@ export const NFTTemplates = {
 
 // 创建默认IPFS客户端实例
 export const ipfsClient = new IPFSClient(
-  process.env.NEXT_PUBLIC_IPFS_API_URL || 'https://api.pinata.cloud',
-  process.env.NEXT_PUBLIC_IPFS_API_KEY
+  process.env.NEXT_PUBLIC_IPFS_API_URL || '/api/ipfs',
+  process.env.NEXT_PUBLIC_IPFS_GATEWAY_URL || 'http://localhost:8080'
 )
 
 /**
@@ -255,10 +295,10 @@ export function isValidIPFSCID(cid: string): boolean {
 /**
  * 工具函数：将IPFS URI转换为HTTP网关URL
  */
-export function ipfsToHttpUrl(ipfsUri: string): string {
+export function ipfsToHttpUrl(ipfsUri: string, gatewayUrl: string = 'http://localhost:8080'): string {
   if (ipfsUri.startsWith('ipfs://')) {
     const cid = ipfsUri.replace('ipfs://', '')
-    return `https://gateway.pinata.cloud/ipfs/${cid}`
+    return `${gatewayUrl}/ipfs/${cid}`
   }
   return ipfsUri
 }
@@ -267,9 +307,37 @@ export function ipfsToHttpUrl(ipfsUri: string): string {
  * 工具函数：将HTTP网关URL转换为IPFS URI
  */
 export function httpToIpfsUrl(httpUrl: string): string {
-  if (httpUrl.includes('gateway.pinata.cloud/ipfs/')) {
-    const cid = httpUrl.split('gateway.pinata.cloud/ipfs/')[1]
+  if (httpUrl.includes('/ipfs/')) {
+    const cid = httpUrl.split('/ipfs/')[1]
     return `ipfs://${cid}`
   }
   return httpUrl
+}
+
+/**
+ * 工具函数：获取所有可用的网关URL
+ */
+export function getGatewayUrls(cid: string, localGateway: string = 'http://localhost:8080'): Array<{ name: string; url: string; isLocal: boolean }> {
+  return [
+    { name: '本地网关', url: `${localGateway}/ipfs/${cid}`, isLocal: true },
+    { name: 'IPFS.io', url: `https://ipfs.io/ipfs/${cid}`, isLocal: false },
+    { name: 'Cloudflare', url: `https://cloudflare-ipfs.com/ipfs/${cid}`, isLocal: false },
+    { name: 'Pinata', url: `https://gateway.pinata.cloud/ipfs/${cid}`, isLocal: false }
+  ]
+}
+
+/**
+ * 工具函数：检查网关是否可访问
+ */
+export async function checkGatewayAvailability(gatewayUrl: string): Promise<boolean> {
+  try {
+    const response = await fetch(gatewayUrl, { 
+      method: 'HEAD', 
+      mode: 'no-cors',
+      timeout: 5000 
+    })
+    return true
+  } catch {
+    return false
+  }
 }

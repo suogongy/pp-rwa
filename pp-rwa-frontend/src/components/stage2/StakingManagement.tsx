@@ -128,11 +128,19 @@ export function StakingManagement({ address }: StakingManagementProps) {
     args: [address as `0x${string}`],
   })
 
+  // 检查代币授权
+  const { data: allowance, refetch: refetchAllowance } = useReadContract({
+    ...rwa20Contract,
+    functionName: 'allowance',
+    args: [address as `0x${string}`, rwaStakingContract.address as `0x${string}`],
+  })
+
   // 合约写入操作
   const { writeContract, isPending: isStakePending, data: stakeData, error: stakeError } = useWriteContract()
   const { writeContract: writeUnstake, isPending: isUnstakePending, data: unstakeData, error: unstakeError } = useWriteContract()
   const { writeContract: writeClaim, isPending: isClaimPending, data: claimData, error: claimError } = useWriteContract()
   const { writeContract: writeCompound, isPending: isCompoundPending, data: compoundData, error: compoundError } = useWriteContract()
+  const { writeContract: writeApprove, isPending: isApprovePending, data: approveData, error: approveError } = useWriteContract()
 
   // 等待交易确认
   const { isLoading: isStakeConfirming, isSuccess: isStakeSuccess } = useWaitForTransactionReceipt({
@@ -149,6 +157,10 @@ export function StakingManagement({ address }: StakingManagementProps) {
 
   const { isLoading: isCompoundConfirming, isSuccess: isCompoundSuccess } = useWaitForTransactionReceipt({
     hash: compoundData,
+  })
+
+  const { isLoading: isApproveConfirming, isSuccess: isApproveSuccess } = useWaitForTransactionReceipt({
+    hash: approveData,
   })
 
   // 质押周期选项
@@ -168,6 +180,7 @@ export function StakingManagement({ address }: StakingManagementProps) {
     refetchBaseRate()
     refetchUserStakes()
     refetchUserBalance()
+    refetchAllowance()
     refetchAPY1()
     refetchAPY2()
     refetchAPY3()
@@ -211,11 +224,41 @@ export function StakingManagement({ address }: StakingManagementProps) {
     }
   }, [userStakeIds])
 
-  const handleStake = () => {
+  const handleApprove = async () => {
+    if (!stakeAmount || !address) return
+    
+    const amount = parseEther(stakeAmount)
+    if (amount === 0n) return
+    
+    try {
+      writeApprove({
+        ...rwa20Contract,
+        functionName: 'approve',
+        args: [rwaStakingContract.address as `0x${string}`, amount],
+      })
+    } catch (error) {
+      console.error('Approve error:', error)
+      setErrors(prev => ({ ...prev, stake: '授权失败: ' + (error as Error).message }))
+    }
+  }
+
+  const handleStake = async () => {
     if (!stakeAmount || !selectedPeriod || !address) return
     
     const amount = parseEther(stakeAmount)
     if (amount === 0n) return
+    
+    // 检查余额
+    if (userBalance && amount > userBalance) {
+      setErrors(prev => ({ ...prev, stake: '余额不足' }))
+      return
+    }
+    
+    // 检查授权
+    if (!allowance || amount > allowance) {
+      setErrors(prev => ({ ...prev, stake: '需要先授权代币使用权限' }))
+      return
+    }
     
     try {
       writeContract({
@@ -225,10 +268,11 @@ export function StakingManagement({ address }: StakingManagementProps) {
       })
     } catch (error) {
       console.error('Stake error:', error)
+      setErrors(prev => ({ ...prev, stake: '质押失败: ' + (error as Error).message }))
     }
   }
 
-  const handleUnstake = () => {
+  const handleUnstake = async () => {
     if (!stakeId) return
     
     try {
@@ -239,10 +283,11 @@ export function StakingManagement({ address }: StakingManagementProps) {
       })
     } catch (error) {
       console.error('Unstake error:', error)
+      setErrors(prev => ({ ...prev, unstake: '解除质押失败: ' + (error as Error).message }))
     }
   }
 
-  const handleClaimRewards = () => {
+  const handleClaimRewards = async () => {
     if (!stakeId) return
     
     try {
@@ -253,14 +298,27 @@ export function StakingManagement({ address }: StakingManagementProps) {
       })
     } catch (error) {
       console.error('Claim rewards error:', error)
+      setErrors(prev => ({ ...prev, claim: '提取奖励失败: ' + (error as Error).message }))
     }
   }
 
-  const handleCompound = () => {
+  const handleCompound = async () => {
     if (!stakeId || !compoundAmount) return
     
     const amount = parseEther(compoundAmount)
     if (amount === 0n) return
+    
+    // 检查余额
+    if (userBalance && amount > userBalance) {
+      setErrors(prev => ({ ...prev, compound: '余额不足' }))
+      return
+    }
+    
+    // 检查授权
+    if (!allowance || amount > allowance) {
+      setErrors(prev => ({ ...prev, compound: '需要先授权代币使用权限' }))
+      return
+    }
     
     try {
       writeContract({
@@ -270,15 +328,18 @@ export function StakingManagement({ address }: StakingManagementProps) {
       })
     } catch (error) {
       console.error('Compound error:', error)
+      setErrors(prev => ({ ...prev, compound: '复投失败: ' + (error as Error).message }))
     }
   }
 
   // 监控交易状态
   useEffect(() => {
-    if (isStakeSuccess || isUnstakeSuccess || isClaimSuccess || isCompoundSuccess) {
+    if (isStakeSuccess || isUnstakeSuccess || isClaimSuccess || isCompoundSuccess || isApproveSuccess) {
       refreshAllData()
+      // 清除错误信息
+      setErrors({})
     }
-  }, [isStakeSuccess, isUnstakeSuccess, isClaimSuccess, isCompoundSuccess])
+  }, [isStakeSuccess, isUnstakeSuccess, isClaimSuccess, isCompoundSuccess, isApproveSuccess])
 
   return (
     <div className="space-y-6">
@@ -354,6 +415,29 @@ export function StakingManagement({ address }: StakingManagementProps) {
           <CardDescription>质押您的RWA代币获得收益</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
+          {/* 余额和授权状态 */}
+          <div className="grid md:grid-cols-2 gap-4 p-4 bg-gray-50 rounded-lg">
+            <div>
+              <Label className="text-sm font-medium">代币余额</Label>
+              <div className="text-lg font-semibold">
+                {userBalance ? formatEther(userBalance) : '0'} RWA
+              </div>
+            </div>
+            <div>
+              <Label className="text-sm font-medium">授权状态</Label>
+              <div className="text-lg font-semibold">
+                {allowance && BigInt(stakeAmount || '0') <= allowance ? (
+                  <span className="text-green-600">已授权</span>
+                ) : (
+                  <span className="text-red-600">未授权</span>
+                )}
+              </div>
+              <div className="text-sm text-gray-600">
+                已授权: {allowance ? formatEther(allowance) : '0'} RWA
+              </div>
+            </div>
+          </div>
+
           <div className="grid md:grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label htmlFor="stakeAmount">质押数量</Label>
@@ -375,13 +459,51 @@ export function StakingManagement({ address }: StakingManagementProps) {
               </div>
             </div>
           </div>
+
+          {/* 授权按钮 */}
+          {allowance && BigInt(stakeAmount || '0') > allowance && (
+            <div className="space-y-2">
+              <Button 
+                onClick={handleApprove}
+                disabled={!stakeAmount || isApprovePending || isApproveConfirming}
+                className="w-full"
+                variant="outline"
+              >
+                {isApprovePending ? '确认中...' : isApproveConfirming ? '授权中...' : '授权代币使用权限'}
+              </Button>
+              {approveError && (
+                <Alert className="border-red-200 bg-red-50">
+                  <AlertDescription className="text-red-700">
+                    授权失败: {approveError.message}
+                  </AlertDescription>
+                </Alert>
+              )}
+              {isApproveSuccess && (
+                <Alert className="border-green-200 bg-green-50">
+                  <AlertDescription className="text-green-700">
+                    ✅ 授权成功！现在可以进行质押
+                  </AlertDescription>
+                </Alert>
+              )}
+            </div>
+          )}
+
+          {/* 质押按钮 */}
           <Button 
             onClick={handleStake}
-            disabled={!stakeAmount || !selectedPeriod || isStakePending || isStakeConfirming}
+            disabled={!stakeAmount || !selectedPeriod || isStakePending || isStakeConfirming || (allowance && BigInt(stakeAmount || '0') > allowance)}
             className="w-full"
           >
             {isStakePending ? '确认中...' : isStakeConfirming ? '质押中...' : '确认质押'}
           </Button>
+          
+          {errors.stake && (
+            <Alert className="border-red-200 bg-red-50">
+              <AlertDescription className="text-red-700">
+                {errors.stake}
+              </AlertDescription>
+            </Alert>
+          )}
           
           {stakeError && (
             <Alert className="border-red-200 bg-red-50">
@@ -476,6 +598,13 @@ export function StakingManagement({ address }: StakingManagementProps) {
               {isClaimPending ? '确认中...' : isClaimConfirming ? '提取中...' : '提取奖励'}
             </Button>
             
+            {errors.claim && (
+              <Alert className="border-red-200 bg-red-50">
+                <AlertDescription className="text-red-700">
+                  {errors.claim}
+                </AlertDescription>
+              </Alert>
+            )}
             {claimError && (
               <Alert className="border-red-200 bg-red-50">
                 <AlertDescription className="text-red-700">
@@ -518,6 +647,13 @@ export function StakingManagement({ address }: StakingManagementProps) {
               {isUnstakePending ? '确认中...' : isUnstakeConfirming ? '解除中...' : '解除质押'}
             </Button>
             
+            {errors.unstake && (
+              <Alert className="border-red-200 bg-red-50">
+                <AlertDescription className="text-red-700">
+                  {errors.unstake}
+                </AlertDescription>
+              </Alert>
+            )}
             {unstakeError && (
               <Alert className="border-red-200 bg-red-50">
                 <AlertDescription className="text-red-700">
@@ -573,6 +709,13 @@ export function StakingManagement({ address }: StakingManagementProps) {
             {isCompoundPending ? '确认中...' : isCompoundConfirming ? '复投中...' : '复投质押'}
           </Button>
           
+          {errors.compound && (
+            <Alert className="border-red-200 bg-red-50">
+              <AlertDescription className="text-red-700">
+                {errors.compound}
+              </AlertDescription>
+            </Alert>
+          )}
           {compoundError && (
             <Alert className="border-red-200 bg-red-50">
               <AlertDescription className="text-red-700">
