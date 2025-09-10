@@ -1270,7 +1270,7 @@ export const RWAStaking_ABI = [
 
 // 合约地址 - 从环境变量读取，如果没有则使用默认值
 export const RWA20_ADDRESS = process.env.NEXT_PUBLIC_RWA20_ADDRESS || '0x5FbDB2315678afecb367f032d93F642f64180aa3' // 本地anvil地址，部署后请替换为实际地址
-export const RWA721_ADDRESS = process.env.NEXT_PUBLIC_RWA721_ADDRESS || '0xc6e7DF5E7b4f2A278906862b61205850344D4e7d' // 本地anvil地址，部署后请替换为实际地址 
+export const RWA721_ADDRESS = process.env.NEXT_PUBLIC_RWA721_ADDRESS || '0x4A679253410272dd5232B3Ff7cF5dbB88f295319' // 本地anvil地址，部署后请替换为实际地址 
 export const RWAStaking_ADDRESS = process.env.NEXT_PUBLIC_RWA_STAKING_ADDRESS || '0x59b670e9fA9D0A427751Af201D676719a970857b' // 本地anvil地址，部署后请替换为实际地址
 
 // 合约配置对象

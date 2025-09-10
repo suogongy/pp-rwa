@@ -14,12 +14,24 @@ interface NFTManagementProps {
   address: string
 }
 
+interface NFTMetadata {
+  name: string
+  description: string
+  image: string
+  attributes: Array<{
+    trait_type: string
+    value: string
+  }>
+}
+
 interface NFTInfo {
   tokenId: number
   tokenURI: string
   owner: string
   royaltyRecipient: string
   royaltyPercentage: number
+  metadata?: NFTMetadata
+  isLoadingMetadata: boolean
 }
 
 export function NFTManagement({ address }: NFTManagementProps) {
@@ -60,7 +72,7 @@ export function NFTManagement({ address }: NFTManagementProps) {
     functionName: 'owner',
   })
 
-  const { data: contractBaseURI, isError: baseURIError, refetch: refetchBaseURI } = useReadContract({
+  const { data: contractBaseURI, isError: contractBaseURIError, refetch: refetchBaseURI } = useReadContract({
     ...rwa721Contract,
     functionName: 'baseURI',
   })
@@ -150,31 +162,68 @@ export function NFTManagement({ address }: NFTManagementProps) {
     refetchOwnedTokens()
   }
 
+  // 获取NFT元数据
+  const fetchNFTMetadata = async (tokenURI: string): Promise<NFTMetadata | null> => {
+    try {
+      // 处理不同的URI格式
+      let url = tokenURI
+      if (tokenURI.startsWith('ipfs://')) {
+        const ipfsHash = tokenURI.replace('ipfs://', '')
+        url = `http://127.0.0.1:8080/ipfs/${ipfsHash}`
+      }
+      
+      const response = await fetch(url)
+      if (!response.ok) return null
+      
+      const metadata = await response.json()
+      return metadata
+    } catch (error) {
+      console.error('Error fetching NFT metadata:', error)
+      return null
+    }
+  }
+
   // 更新拥有的NFT列表
   useEffect(() => {
     if (ownedTokenIds && Array.isArray(ownedTokenIds)) {
       const fetchNFTDetails = async () => {
         const nfts: NFTInfo[] = []
+        
         for (const tokenId of ownedTokenIds) {
           try {
-            const [royaltyInfo, uri] = await Promise.all([
-              // 这里需要调用合约获取版税信息
-              // 由于合约调用的限制，我们暂时使用占位符
-              Promise.resolve([address, 250]), // 默认版税2.5%
-              Promise.resolve(`ipfs://QmSample${tokenId}`)
-            ])
-            
-            nfts.push({
+            // 创建占位符NFT信息，稍后通过useReadContract更新
+            const nft: NFTInfo = {
               tokenId: Number(tokenId),
-              tokenURI: uri as string,
+              tokenURI: `ipfs://QmSample${tokenId}`,
               owner: address,
-              royaltyRecipient: royaltyInfo[0] as string,
-              royaltyPercentage: Number(royaltyInfo[1])
-            })
+              royaltyRecipient: address,
+              royaltyPercentage: 250,
+              isLoadingMetadata: true
+            }
+            
+            nfts.push(nft)
+            
+            // 对于占位符URI，直接标记为完成加载
+            setOwnedNFTs(prev => prev.map(n => 
+              n.tokenId === Number(tokenId) 
+                ? { ...n, isLoadingMetadata: false }
+                : n
+            ))
           } catch (error) {
             console.error('Error fetching NFT details:', error)
+            // 即使出错也创建一个基本的NFT信息
+            const nft: NFTInfo = {
+              tokenId: Number(tokenId),
+              tokenURI: `ipfs://QmSample${tokenId}`,
+              owner: address,
+              royaltyRecipient: address,
+              royaltyPercentage: 250,
+              isLoadingMetadata: false
+            }
+            nfts.push(nft)
           }
         }
+        
         setOwnedNFTs(nfts)
       }
       
@@ -255,6 +304,10 @@ export function NFTManagement({ address }: NFTManagementProps) {
   useEffect(() => {
     if (isMintSuccess || isBatchSuccess || isRoyaltySuccess || isBaseURISuccess) {
       refreshAllData()
+      // 额外刷新拥有的NFT列表，延迟更长时间确保区块链数据更新
+      setTimeout(() => {
+        refetchOwnedTokens()
+      }, 2000)
     }
   }, [isMintSuccess, isBatchSuccess, isRoyaltySuccess, isBaseURISuccess])
 
@@ -305,21 +358,90 @@ export function NFTManagement({ address }: NFTManagementProps) {
         </CardHeader>
         <CardContent>
           {ownedNFTs.length > 0 ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {ownedNFTs.map((nft) => (
-                <div key={nft.tokenId} className="border rounded-lg p-4 space-y-2">
-                  <div className="flex items-center justify-between">
-                    <Badge className="bg-purple-500">#{nft.tokenId}</Badge>
-                    <Badge variant="outline">
-                      {nft.royaltyPercentage / 100}%
-                    </Badge>
+                <div key={nft.tokenId} className="bg-white rounded-lg shadow-md overflow-hidden hover:shadow-lg transition-shadow">
+                  {/* NFT图片 */}
+                  <div className="aspect-square bg-gray-100 relative">
+                    {nft.isLoadingMetadata ? (
+                      <div className="w-full h-full flex items-center justify-center">
+                        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
+                      </div>
+                    ) : nft.metadata?.image ? (
+                      <img 
+                        src={nft.metadata.image.startsWith('ipfs://') 
+                          ? `http://127.0.0.1:8080/ipfs/${nft.metadata.image.replace('ipfs://', '')}`
+                          : nft.metadata.image
+                        }
+                        alt={nft.metadata.name || `NFT #${nft.tokenId}`}
+                        className="w-full h-full object-cover"
+                        onError={(e) => {
+                          const target = e.target as HTMLImageElement
+                          target.style.display = 'none'
+                          target.parentElement!.innerHTML = `
+                            <div class="w-full h-full flex items-center justify-center bg-gray-200">
+                              <svg class="w-16 h-16 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
+                                <path fill-rule="evenodd" d="M4 3a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V5a2 2 0 00-2-2H4zm12 12H4l4-8 3 6 2-4 3 6z" clip-rule="evenodd" />
+                              </svg>
+                            </div>
+                          `
+                        }}
+                      />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center bg-gray-200">
+                        <svg className="w-16 h-16 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
+                          <path fillRule="evenodd" d="M4 3a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V5a2 2 0 00-2-2H4zm12 12H4l4-8 3 6 2-4 3 6z" clipRule="evenodd" />
+                        </svg>
+                      </div>
+                    )}
                   </div>
-                  <div className="text-sm text-gray-600">
-                    <div>Token ID: {nft.tokenId}</div>
-                    <div>版税: {nft.royaltyPercentage / 100}%</div>
-                  </div>
-                  <div className="text-xs text-gray-500 break-all">
-                    URI: {nft.tokenURI}
+
+                  {/* NFT信息 */}
+                  <div className="p-4 space-y-3">
+                    {/* 标题和ID */}
+                    <div className="flex items-start justify-between">
+                      <div className="flex-1">
+                        <h3 className="font-semibold text-gray-900 truncate">
+                          {nft.metadata?.name || `RWA721 #${nft.tokenId}`}
+                        </h3>
+                        <p className="text-xs text-gray-500 mt-1">ID: #{nft.tokenId}</p>
+                      </div>
+                      <Badge className="bg-purple-500 text-xs">
+                        {nft.royaltyPercentage / 100}%
+                      </Badge>
+                    </div>
+
+                    {/* 描述 */}
+                    {nft.metadata?.description && (
+                      <p className="text-sm text-gray-600 line-clamp-2">
+                        {nft.metadata.description}
+                      </p>
+                    )}
+
+                    {/* 属性 */}
+                    {nft.metadata?.attributes && nft.metadata.attributes.length > 0 && (
+                      <div className="space-y-2">
+                        <h4 className="text-xs font-medium text-gray-700">属性</h4>
+                        <div className="grid grid-cols-2 gap-2">
+                          {nft.metadata.attributes.map((attr, index) => (
+                            <div key={index} className="bg-gray-50 rounded p-2 text-xs">
+                              <div className="text-gray-500">{attr.trait_type}</div>
+                              <div className="font-medium text-gray-900 truncate">{attr.value}</div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* 版税信息 */}
+                    <div className="flex items-center justify-between pt-2 border-t">
+                      <div className="text-xs text-gray-500">
+                        版税接收者
+                      </div>
+                      <div className="text-xs font-mono text-gray-700 max-w-[120px] truncate">
+                        {nft.royaltyRecipient.slice(0, 6)}...{nft.royaltyRecipient.slice(-4)}
+                      </div>
+                    </div>
                   </div>
                 </div>
               ))}
@@ -451,11 +573,38 @@ export function NFTManagement({ address }: NFTManagementProps) {
             </Button>
             
             {selectedTokenId && tokenInfo && (
-              <div className="space-y-2 text-sm">
-                <div><strong>所有者:</strong> {tokenOwner?.toString() || '未知'}</div>
-                <div><strong>元数据URI:</strong> {tokenURI?.toString() || '未设置'}</div>
-                <div><strong>版税接收者:</strong> {tokenInfo[0]?.toString() || '未设置'}</div>
-                <div><strong>版税比例:</strong> {Number(tokenInfo[1]) / 100}%</div>
+              <div className="mt-4 p-4 bg-gray-50 rounded-lg border">
+                <h4 className="font-medium text-gray-900 mb-3">查询结果</h4>
+                <div className="space-y-2 text-sm">
+                  <div className="flex justify-between">
+                    <span className="text-gray-600">Token ID:</span>
+                    <span className="font-medium">#{selectedTokenId}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-600">所有者:</span>
+                    <span className="font-mono text-xs break-all max-w-[200px]">
+                      {tokenOwner?.toString() || '未知'}
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-start">
+                    <span className="text-gray-600">元数据URI:</span>
+                    <span className="font-mono text-xs break-all max-w-[200px] text-right">
+                      {tokenURI?.toString() || '未设置'}
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-600">版税接收者:</span>
+                    <span className="font-mono text-xs break-all max-w-[200px]">
+                      {tokenInfo[0]?.toString() || '未设置'}
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-600">版税比例:</span>
+                    <span className="font-medium text-blue-600">
+                      {Number(tokenInfo[1]) / 100}%
+                    </span>
+                  </div>
+                </div>
               </div>
             )}
           </CardContent>

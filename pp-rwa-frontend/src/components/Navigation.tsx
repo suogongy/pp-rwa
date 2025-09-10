@@ -2,12 +2,31 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
+import { useState, useEffect } from 'react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 
 export function Navigation() {
   const pathname = usePathname()
+  const [mounted, setMounted] = useState(false)
+  
+  useEffect(() => {
+    setMounted(true)
+  }, [])
+  
+  // 避免hydration错误
+  if (!mounted) {
+    return (
+      <div className="w-full max-w-7xl mx-auto p-6">
+        <div className="mb-8">
+          <h1 className="text-3xl font-bold text-gray-900 mb-2">RWA项目开发路线</h1>
+          <p className="text-gray-600">现实世界资产代币化系统 - 分阶段开发计划</p>
+        </div>
+        <div className="text-center">正在加载导航...</div>
+      </div>
+    )
+  }
   
   const stages = [
     {

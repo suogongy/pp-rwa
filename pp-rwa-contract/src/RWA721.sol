@@ -47,6 +47,7 @@ contract RWA721 is ERC721, ERC721URIStorage, ERC721Burnable, Ownable, Pausable, 
     uint256 private constant MAX_BATCH_SIZE = 50;
     uint256 private constant MAX_ROYALTY_PERCENTAGE = 1000; // 10% max (1000 basis points)
     uint256 private constant BASIS_POINTS = 10000; // 100% = 10000 basis points
+    uint256 private constant DEFAULT_ROYALTY_PERCENTAGE = 250; // 2.5% default royalty (250 basis points)
 
     /**
      * @dev Constructor
@@ -85,10 +86,15 @@ contract RWA721 is ERC721, ERC721URIStorage, ERC721Burnable, Ownable, Pausable, 
         _safeMint(to, tokenId);
         _setTokenURI(tokenId, tokenURI);
 
+        // Set default royalty information
+        _royaltyRecipients[tokenId] = to;
+        _royaltyPercentages[tokenId] = DEFAULT_ROYALTY_PERCENTAGE;
+
         // Generate transaction ID for tracking
         bytes32 txId = keccak256(abi.encodePacked(block.timestamp, to, tokenId, tokenURI, blockhash(block.number - 1)));
 
         emit NFTMinted(to, tokenId, tokenURI, txId);
+        emit RoyaltySet(tokenId, to, DEFAULT_ROYALTY_PERCENTAGE);
 
         return tokenId;
     }
@@ -122,6 +128,10 @@ contract RWA721 is ERC721, ERC721URIStorage, ERC721Burnable, Ownable, Pausable, 
 
             _safeMint(to, tokenId);
             _setTokenURI(tokenId, tokenURIs[i]);
+
+            // Set default royalty information for each NFT
+            _royaltyRecipients[tokenId] = to;
+            _royaltyPercentages[tokenId] = DEFAULT_ROYALTY_PERCENTAGE;
         }
 
         _tokenIdCounter += tokenURIs.length;
@@ -132,6 +142,11 @@ contract RWA721 is ERC721, ERC721URIStorage, ERC721Burnable, Ownable, Pausable, 
         );
 
         emit BatchNFTMinted(to, tokenIds, "", batchId);
+
+        // Emit royalty events for batch minted NFTs
+        for (uint256 i = 0; i < tokenIds.length; i++) {
+            emit RoyaltySet(tokenIds[i], to, DEFAULT_ROYALTY_PERCENTAGE);
+        }
 
         return tokenIds;
     }

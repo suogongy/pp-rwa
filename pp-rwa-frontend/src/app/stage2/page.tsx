@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useAccount } from 'wagmi'
 import { Navigation } from '@/components/Navigation'
 import { WalletConnect } from '@/components/WalletConnect'
@@ -14,9 +14,9 @@ export default function Stage2Page() {
   const { isConnected, address } = useAccount()
   const [mounted, setMounted] = useState(false)
   
-  useState(() => {
+  useEffect(() => {
     setMounted(true)
-  })
+  }, [])
   
   if (!mounted) {
     return (
