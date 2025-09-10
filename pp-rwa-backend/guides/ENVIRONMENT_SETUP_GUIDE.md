@@ -1,8 +1,8 @@
-# 🔧 环境配置手动指南
+# 🔧 环境配置指南
 
 ## 🎯 概述
 
-本指南详细介绍如何手动配置多环境系统，帮助您理解环境管理的原理和操作。
+本指南详细介绍如何配置多环境系统，支持本地开发和测试环境的快速切换。
 
 ## 📋 环境管理概念
 
@@ -60,9 +60,9 @@ NODE_ENV=development
 PORT=3001
 
 # Local Anvil 配置
-LOCAL_GRAPH_URL=http://localhost:8000/subgraphs/name/pp-rwa
+LOCAL_GRAPH_URL=http://localhost:8000/subgraphs/name/pp-rwa-local
 LOCAL_RPC_URL=http://localhost:8545
-LOCAL_CONTRACT_ADDRESS=0x0000000000000000000000000000000000000000
+LOCAL_CONTRACT_ADDRESS=0x5FbDB2315678afecb367f032d93F642f64180aa3
 
 # Sepolia 配置（本地环境时不需要，但保留结构）
 SEPOLIA_GRAPH_URL=https://api.thegraph.com/subgraphs/name/YOUR_USERNAME/YOUR_SUBGRAPH_NAME
@@ -89,7 +89,7 @@ NODE_ENV=development
 PORT=3001
 
 # Local Anvil 配置（测试环境时不需要，但保留结构）
-LOCAL_GRAPH_URL=http://localhost:8000/subgraphs/name/pp-rwa
+LOCAL_GRAPH_URL=http://localhost:8000/subgraphs/name/pp-rwa-local
 LOCAL_RPC_URL=http://localhost:8545
 LOCAL_CONTRACT_ADDRESS=0x0000000000000000000000000000000000000000
 
@@ -102,7 +102,7 @@ SEPOLIA_CONTRACT_ADDRESS=0xYourSepoliaContractAddress
 CURRENT_ENV=sepolia
 ```
 
-### 2. 环境切换  
+### 2. 环境切换
 
 ```bash
 # 切换到本地环境
@@ -243,8 +243,9 @@ cat broadcast/DeployRWA20.s.sol/11155111/run-latest.json | jq -r '.transactions[
 # 启动 Anvil
 anvil --host 0.0.0.0 --port 8545 --chain-id 31337 --block-time 2
 
-# 启动 Graph Node (可选)
-docker run -d --name graph-node -p 8000:8000 graphprotocol/graph-node
+# 启动 Graph Node (使用 Docker Compose)
+cd pp-rwa-backend/graph-node
+docker-compose -f docker/docker-compose.yml up -d
 ```
 
 #### 步骤 2: 部署合约
@@ -268,14 +269,14 @@ cd ../pp-rwa-backend
 cp .env.local .env
 ```
 
-#### 步骤 4: 部署本地 subgraph (可选)
+#### 步骤 4: 部署本地 subgraph
 
 ```bash
 cd subgraph
-graph codegen --config subgraph-local.yaml
-graph build --config subgraph-local.yaml
-graph create --node http://localhost:8020 pp-rwa
-graph deploy --node http://localhost:8020 pp-rwa
+npm run codegen
+npm run build
+npm run create-local
+npm run deploy-local
 ```
 
 #### 步骤 5: 启动 API 服务
@@ -301,8 +302,8 @@ forge script script/DeployRWA20.s.sol:DeployToSepolia --rpc-url $SEPOLIA_RPC_URL
 ```bash
 cd ../pp-rwa-backend/subgraph
 graph auth https://api.thegraph.com/deploy/ YOUR_ACCESS_TOKEN
-graph codegen
-graph build
+graph codegen --config subgraph-production.yaml
+graph build --config subgraph-production.yaml
 graph create --node https://api.thegraph.com/deploy/ your-username/your-project-name
 graph deploy --node https://api.thegraph.com/deploy/ your-username/your-project-name
 ```
@@ -457,4 +458,52 @@ cp .env.example .env.sepolia
 5. 使用 `cp .env.local .env` 切换环境
 ```
 
-通过手动配置，您将深入理解环境管理的原理，为未来的项目打下坚实基础！
+### 4. 自动化脚本
+
+创建环境切换脚本：
+
+```bash
+# 创建 switch-env.sh
+cat > switch-env.sh << 'EOF'
+#!/bin/bash
+
+if [ -z "$1" ]; then
+  echo "用法: ./switch-env.sh [local|sepolia]"
+  exit 1
+fi
+
+ENV=$1
+
+if [ "$ENV" = "local" ]; then
+  cp .env.local .env
+  echo "已切换到本地环境"
+elif [ "$ENV" = "sepolia" ]; then
+  cp .env.sepolia .env
+  echo "已切换到 Sepolia 环境"
+else
+  echo "不支持的环境: $ENV"
+  exit 1
+fi
+
+# 验证配置
+node verify-env.js
+EOF
+
+chmod +x switch-env.sh
+
+# 使用方法
+./switch-env.sh local
+./switch-env.sh sepolia
+```
+
+## 🎯 学习要点
+
+通过环境配置的学习，您将掌握：
+
+1. **环境隔离**: 理解为什么需要多环境配置
+2. **配置管理**: 如何有效管理不同环境的配置
+3. **自动化**: 创建脚本简化环境切换
+4. **调试技能**: 环境配置问题的诊断和解决
+5. **最佳实践**: 生产级环境配置的标准方法
+
+这些技能对于任何全栈开发项目都非常重要！
