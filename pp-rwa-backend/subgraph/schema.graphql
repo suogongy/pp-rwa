@@ -39,7 +39,7 @@ type Mint @entity(immutable: true) {
   timestamp: BigInt!
 }
 
-type Burn @entity {
+type Burn @entity(immutable: true) {
   id: ID!
   token: Token!
   from: Bytes!
@@ -50,7 +50,7 @@ type Burn @entity {
   timestamp: BigInt!
 }
 
-type BatchTransfer @entity {
+type BatchTransfer @entity(immutable: true) {
   id: ID!
   token: Token!
   from: Bytes!
@@ -73,7 +73,7 @@ type WhitelistUpdate @entity(immutable: true) {
   timestamp: BigInt!
 }
 
-type Account @entity(immutable: true) {
+type Account @entity {
   id: ID!
   address: Bytes!
   transfersFrom: [Transfer!]!

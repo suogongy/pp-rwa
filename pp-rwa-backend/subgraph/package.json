@@ -1,15 +1,33 @@
 {
-  "name": "subgraph",
+  "name": "pp-rwa-subgraph",
   "version": "1.0.0",
+  "description": "Subgraph for PP-RWA token tracking",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "codegen": "graph codegen subgraph-local.yaml",
+    "codegen:template": "graph codegen subgraph-template.yaml",
+    "build": "graph build subgraph-local.yaml",
+    "build:template": "graph build subgraph-template.yaml",
+    "deploy": "graph deploy --node https://api.thegraph.com/deploy/ --ipfs https://api.thegraph.com/ipfs/ pp-rwa/pp-rwa subgraph-local.yaml",
+    "deploy-local": "graph deploy --node http://localhost:8020/ --ipfs http://localhost:5001 pp-rwa-local subgraph-local.yaml --version-label v1.0.0",
+    "deploy-local:dev": "graph deploy --node http://localhost:8020/ --ipfs http://localhost:5001 pp-rwa-local subgraph-local.yaml --version-label dev",
+    "create-local": "graph create --node http://localhost:8020/ pp-rwa-local",
+    "remove-local": "graph remove --node http://localhost:8020/ pp-rwa-local",
+    "test": "graph test subgraph-local.yaml"
   },
-  "keywords": [],
+  "keywords": [
+    "subgraph",
+    "ethereum",
+    "defi",
+    "rwa"
+  ],
   "author": "",
   "license": "ISC",
-  "description": "",
   "dependencies": {
+    "@graphprotocol/graph-cli": "^0.68.0",
     "@graphprotocol/graph-ts": "^0.38.1"
+  },
+  "devDependencies": {
+    "matchstick-as": "^0.6.0"
   }
 }

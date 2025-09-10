@@ -51,6 +51,14 @@
           {
             "event": "WhitelistUpdated(indexed address,bool)",
             "handler": "handleWhitelistUpdated"
+          },
+          {
+            "event": "Paused(address)",
+            "handler": "handlePaused"
+          },
+          {
+            "event": "Unpaused(address)",
+            "handler": "handleUnpaused"
           }
         ],
         "file": "./src/rwa20-mapping.ts"

@@ -4,7 +4,9 @@ import {
   TokensMinted,
   TokensBurned,
   BatchTransferExecuted,
-  WhitelistUpdated
+  WhitelistUpdated,
+  Paused,
+  Unpaused
 } from "../generated/RWA20/RWA20"
 import { RWA20 } from "../generated/RWA20/RWA20"
 import {
@@ -87,6 +89,10 @@ export function handleTransfer(event: Transfer): void {
   transfer.timestamp = event.block.timestamp
   transfer.save()
 
+  // Update account relationships
+  fromAccount.transfersFrom = fromAccount.transfersFrom.concat([transfer.id])
+  toAccount.transfersTo = toAccount.transfersTo.concat([transfer.id])
+
   // Update token's updatedAt timestamp
   token.updatedAt = event.block.timestamp
   token.save()
@@ -114,6 +120,9 @@ export function handleTokensMinted(event: TokensMinted): void {
   mint.timestamp = event.block.timestamp
   mint.save()
 
+  // Update account relationships
+  toAccount.mintsReceived = toAccount.mintsReceived.concat([mint.id])
+
   // Update token's updatedAt timestamp
   token.updatedAt = event.block.timestamp
   token.save()
@@ -138,6 +147,9 @@ export function handleTokensBurned(event: TokensBurned): void {
   burn.transactionHash = event.transaction.hash
   burn.timestamp = event.block.timestamp
   burn.save()
+
+  // Update account relationships
+  fromAccount.burnsFrom = fromAccount.burnsFrom.concat([burn.id])
 
   // Update token's updatedAt timestamp
   token.updatedAt = event.block.timestamp
@@ -172,6 +184,9 @@ export function handleBatchTransferExecuted(event: BatchTransferExecuted): void 
   batchTransfer.timestamp = event.block.timestamp
   batchTransfer.save()
 
+  // Update account relationships
+  fromAccount.batchTransfersFrom = fromAccount.batchTransfersFrom.concat([batchTransfer.id])
+
   // Update token's updatedAt timestamp
   token.updatedAt = event.block.timestamp
   token.save()
@@ -196,7 +211,38 @@ export function handleWhitelistUpdated(event: WhitelistUpdated): void {
   whitelistUpdate.timestamp = event.block.timestamp
   whitelistUpdate.save()
 
+  // Update account relationships
+  account.whitelistUpdates = account.whitelistUpdates.concat([whitelistUpdate.id])
+
   // Update token's updatedAt timestamp
+  token.updatedAt = event.block.timestamp
+  token.save()
+
+  // Update account's updatedAt timestamp
+  account.updatedAt = event.block.timestamp
+  account.save()
+}
+
+export function handlePaused(event: Paused): void {
+  let token = getOrCreateToken(event.address)
+  let account = getOrCreateAccount(event.params.account)
+
+  // Update token pause state
+  token.isPaused = true
+  token.updatedAt = event.block.timestamp
+  token.save()
+
+  // Update account's updatedAt timestamp
+  account.updatedAt = event.block.timestamp
+  account.save()
+}
+
+export function handleUnpaused(event: Unpaused): void {
+  let token = getOrCreateToken(event.address)
+  let account = getOrCreateAccount(event.params.account)
+
+  // Update token pause state
+  token.isPaused = false
   token.updatedAt = event.block.timestamp
   token.save()
 
