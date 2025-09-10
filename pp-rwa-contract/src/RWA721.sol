@@ -287,8 +287,7 @@ contract RWA721 is ERC721, ERC721URIStorage, ERC721Burnable, Ownable, Pausable, 
     function tokenURI(uint256 tokenId) public view override(ERC721, ERC721URIStorage) returns (string memory) {
         require(_ownerOf(tokenId) != address(0), "ERC721Metadata: URI query for nonexistent token");
         
-        string memory base = _baseURI();
-        return bytes(base).length > 0 ? string.concat(base, tokenId.toString()) : "";
+        return super.tokenURI(tokenId);
     }
     
     /**

@@ -32,21 +32,26 @@ contract DeployRWAStaking is Script {
         RWAStaking staking = new RWAStaking(tokenAddress, tokenAddress, deployerAddress);
         
         console.log("RWAStaking deployed to:");
-        console.logAddress("", address(staking));
-        console.log("Token Address:");
-        console.logAddress("", staking.token());
+        console.logAddress(address(staking));
+        console.log("Staking Token Address:");
+        console.logAddress(address(staking.stakingToken()));
+        console.log("Reward Token Address:");
+        console.logAddress(address(staking.rewardToken()));
         console.log("Owner:");
-        console.logAddress("", staking.owner());
+        console.logAddress(staking.owner());
         
         vm.stopBroadcast();
         
         // Log deployment info for easy integration
         console.log("\n=== Deployment Summary ===");
         console.logString("Network: local");
-        console.logAddress("RWA20 Address:", tokenAddress);
-        console.logAddress("RWAStaking Address:", address(staking));
-        console.logAddress("Deployer:", deployerAddress);
-        console.log("Transaction Hash:");
-        console.logBytes32(vm.txHash());
+        console.logString("RWA20 Address: ");
+        console.logAddress(tokenAddress);
+        console.logString("RWAStaking Address: ");
+        console.logAddress(address(staking));
+        console.logString("Deployer: ");
+        console.logAddress(deployerAddress);
+        console.logString("Transaction Hash: ");
+        console.logBytes32(bytes32(0)); // Placeholder for tx hash
     }
 }

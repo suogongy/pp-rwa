@@ -40,20 +40,24 @@ contract DeployAll is Script {
         // Log deployment info for easy integration
         console.log("\n=== Complete Deployment Summary ===");
         console.logString("Network: local");
-        console.logAddress("Deployer:", deployerAddress);
-        console.logAddress("RWA20 Address:", address(token));
-        console.logAddress("RWA721 Address:", address(nft));
-        console.logAddress("RWAStaking Address:", address(staking));
-        console.log("Transaction Hash:");
-        console.logBytes32(vm.txHash());
+        console.logString("Deployer: ");
+        console.logAddress(deployerAddress);
+        console.logString("RWA20 Address: ");
+        console.logAddress(address(token));
+        console.logString("RWA721 Address: ");
+        console.logAddress(address(nft));
+        console.logString("RWAStaking Address: ");
+        console.logAddress(address(staking));
+        console.logString("Transaction Hash: ");
+        console.logBytes32(bytes32(0)); // Placeholder for tx hash
         
         // Environment variables for frontend integration
         console.log("\n=== Environment Variables ===");
         console.logString("NEXT_PUBLIC_RWA20_ADDRESS=");
-        console.logAddress("", address(token));
+        console.logAddress(address(token));
         console.logString("NEXT_PUBLIC_RWA721_ADDRESS=");
-        console.logAddress("", address(nft));
+        console.logAddress(address(nft));
         console.logString("NEXT_PUBLIC_STAKING_ADDRESS=");
-        console.logAddress("", address(staking));
+        console.logAddress(address(staking));
     }
 }

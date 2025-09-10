@@ -17,22 +17,24 @@ contract DeployRWA721 is Script {
         RWA721 nft = new RWA721("Real World Asset NFT", "RWA721", "https://api.rwa.com/metadata/", deployerAddress);
         
         console.log("RWA721 deployed to:");
-        console.logAddress("", address(nft));
+        console.logAddress(address(nft));
         console.log("NFT Name:");
-        console.logString("", nft.name());
+        console.logString(nft.name());
         console.log("NFT Symbol:");
-        console.logString("", nft.symbol());
+        console.logString(nft.symbol());
         console.log("Owner:");
-        console.logAddress("", nft.owner());
+        console.logAddress(nft.owner());
         
         vm.stopBroadcast();
         
         // Log deployment info for easy integration
         console.log("\n=== Deployment Summary ===");
         console.logString("Network: local");
-        console.logAddress("RWA721 Address:", address(nft));
-        console.logAddress("Deployer:", deployerAddress);
-        console.log("Transaction Hash:");
-        console.logBytes32(vm.txHash());
+        console.logString("RWA721 Address: ");
+        console.logAddress(address(nft));
+        console.logString("Deployer: ");
+        console.logAddress(deployerAddress);
+        console.logString("Transaction Hash: ");
+        console.logBytes32(bytes32(0)); // Placeholder for tx hash
     }
 }
