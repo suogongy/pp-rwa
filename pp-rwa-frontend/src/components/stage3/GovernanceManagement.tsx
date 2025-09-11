@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { useAccount, useReadContract, useWriteContract, useWaitForTransactionReceipt } from 'wagmi'
-import { RWA_GOVERNOR_ADDRESS, RWAGovernor_ABI } from '@/lib/wagmi'
+import { RWAGovernor_ADDRESS, RWAGovernor_ABI } from '@/lib/wagmi'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -34,7 +34,7 @@ export function GovernanceManagement({ address }: { address: string }) {
 
   // 读取提案列表
   const { data: proposalCount } = useReadContract({
-    address: RWA_GOVERNOR_ADDRESS,
+    address: RWAGovernor_ADDRESS,
     abi: RWAGovernor_ABI,
     functionName: 'proposalCount',
   })
@@ -61,7 +61,7 @@ export function GovernanceManagement({ address }: { address: string }) {
 
     try {
       writeContract({
-        address: RWA_GOVERNOR_ADDRESS,
+        address: RWAGovernor_ADDRESS,
         abi: RWAGovernor_ABI,
         functionName: 'propose',
         args: [
@@ -80,7 +80,7 @@ export function GovernanceManagement({ address }: { address: string }) {
   const handleVote = async (proposalId: bigint, support: number) => {
     try {
       writeContract({
-        address: RWA_GOVERNOR_ADDRESS,
+        address: RWAGovernor_ADDRESS,
         abi: RWAGovernor_ABI,
         functionName: 'castVote',
         args: [proposalId, support],
@@ -94,7 +94,7 @@ export function GovernanceManagement({ address }: { address: string }) {
   const handleExecute = async (proposalId: bigint) => {
     try {
       writeContract({
-        address: RWA_GOVERNOR_ADDRESS,
+        address: RWAGovernor_ADDRESS,
         abi: RWAGovernor_ABI,
         functionName: 'execute',
         args: [

@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { useAccount, useReadContract, useWriteContract, useWaitForTransactionReceipt } from 'wagmi'
-import { RWA_MULTISIG_WALLET_ADDRESS, RWAMultisigWallet_ABI } from '@/lib/wagmi'
+import { RWAMultisigWallet_ADDRESS, RWAMultisigWallet_ABI } from '@/lib/wagmi'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -31,28 +31,28 @@ export function MultisigManagement({ address }: { address: string }) {
 
   // 读取所有者列表
   const { data: owners } = useReadContract({
-    address: RWA_MULTISIG_WALLET_ADDRESS,
+    address: RWAMultisigWallet_ADDRESS,
     abi: RWAMultisigWallet_ABI,
     functionName: 'getOwners',
   })
 
   // 读取所需确认数
   const { data: requiredConfirmations } = useReadContract({
-    address: RWA_MULTISIG_WALLET_ADDRESS,
+    address: RWAMultisigWallet_ADDRESS,
     abi: RWAMultisigWallet_ABI,
     functionName: 'required',
   })
 
   // 读取交易数量
   const { data: transactionCount } = useReadContract({
-    address: RWA_MULTISIG_WALLET_ADDRESS,
+    address: RWAMultisigWallet_ADDRESS,
     abi: RWAMultisigWallet_ABI,
     functionName: 'transactionCount',
   })
 
   // 读取合约余额
   const { data: contractBalance } = useReadContract({
-    address: RWA_MULTISIG_WALLET_ADDRESS,
+    address: RWAMultisigWallet_ADDRESS,
     abi: [
       {
         inputs: [],
@@ -67,7 +67,7 @@ export function MultisigManagement({ address }: { address: string }) {
 
   // 检查是否是所有者
   const { data: isOwner } = useReadContract({
-    address: RWA_MULTISIG_WALLET_ADDRESS,
+    address: RWAMultisigWallet_ADDRESS,
     abi: RWAMultisigWallet_ABI,
     functionName: 'isOwner',
     args: [address as `0x${string}`],
@@ -79,7 +79,7 @@ export function MultisigManagement({ address }: { address: string }) {
 
     try {
       writeContract({
-        address: RWA_MULTISIG_WALLET_ADDRESS,
+        address: RWAMultisigWallet_ADDRESS,
         abi: RWAMultisigWallet_ABI,
         functionName: 'submitTransaction',
         args: [
@@ -97,7 +97,7 @@ export function MultisigManagement({ address }: { address: string }) {
   const handleConfirmTransaction = async (transactionId: bigint) => {
     try {
       writeContract({
-        address: RWA_MULTISIG_WALLET_ADDRESS,
+        address: RWAMultisigWallet_ADDRESS,
         abi: RWAMultisigWallet_ABI,
         functionName: 'confirmTransaction',
         args: [transactionId],
@@ -111,7 +111,7 @@ export function MultisigManagement({ address }: { address: string }) {
   const handleExecuteTransaction = async (transactionId: bigint) => {
     try {
       writeContract({
-        address: RWA_MULTISIG_WALLET_ADDRESS,
+        address: RWAMultisigWallet_ADDRESS,
         abi: RWAMultisigWallet_ABI,
         functionName: 'executeTransaction',
         args: [transactionId],
@@ -125,7 +125,7 @@ export function MultisigManagement({ address }: { address: string }) {
   const handleRevokeConfirmation = async (transactionId: bigint) => {
     try {
       writeContract({
-        address: RWA_MULTISIG_WALLET_ADDRESS,
+        address: RWAMultisigWallet_ADDRESS,
         abi: RWAMultisigWallet_ABI,
         functionName: 'revokeConfirmation',
         args: [transactionId],

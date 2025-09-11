@@ -21,7 +21,7 @@ export default function Stage3Page() {
   
   if (!mounted) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-green-50 to-emerald-100">
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50">
         <div className="container mx-auto px-4 py-8">
           <div className="text-center">
             <p>正在加载...</p>
@@ -32,7 +32,7 @@ export default function Stage3Page() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-green-50 to-emerald-100">
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50">
       <div className="container mx-auto px-4 py-8">
         <header className="text-center mb-8">
           <h1 className="text-4xl font-bold text-gray-900 mb-4">
@@ -45,7 +45,7 @@ export default function Stage3Page() {
 
         <Navigation />
 
-        <main className="mt-8">
+        <div className="container mx-auto px-4 mt-8">
           {!isConnected ? (
             <div className="max-w-4xl mx-auto">
               <Card>
@@ -204,7 +204,7 @@ export default function Stage3Page() {
               </div>
             </div>
           )}
-        </main>
+        </div>
       </div>
     </div>
   )

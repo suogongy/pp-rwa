@@ -107,7 +107,7 @@ export function WalletConnect() {
         </div>
         <Button 
           onClick={() => disconnect()} 
-          variant="outline" 
+          variant="secondary" 
           className="w-full"
         >
           断开连接

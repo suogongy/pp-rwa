@@ -392,7 +392,7 @@ export function TokenActions({ address }: TokenActionsProps) {
             }}
             disabled={!queryAddress || isQueryLoading}
             className="w-full"
-            variant="outline"
+            variant="secondary"
           >
             {isQueryLoading ? '查询中...' : '查询余额'}
           </Button>

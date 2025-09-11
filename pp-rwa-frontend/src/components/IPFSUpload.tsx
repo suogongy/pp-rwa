@@ -231,7 +231,7 @@ export function IPFSUpload({ onUploadComplete }: IPFSUploadProps) {
         </div>
         <div className="flex items-center space-x-2">
           <Button 
-            variant="outline" 
+            variant="secondary" 
             size="sm"
             onClick={() => window.open('/ipfs', '_blank')}
           >
@@ -239,7 +239,7 @@ export function IPFSUpload({ onUploadComplete }: IPFSUploadProps) {
             IPFS管理中心
           </Button>
           <Button 
-            variant="outline" 
+            variant="secondary" 
             size="sm"
             onClick={() => window.open('http://localhost:5001/webui', '_blank')}
           >
@@ -445,7 +445,7 @@ export function IPFSUpload({ onUploadComplete }: IPFSUploadProps) {
                     {(selectedFile.size / 1024 / 1024).toFixed(2)} MB
                   </div>
                 </div>
-                <Button variant="outline" size="sm" onClick={resetForm}>
+                <Button variant="secondary" size="sm" onClick={resetForm}>
                   重新选择
                 </Button>
               </div>
@@ -461,7 +461,7 @@ export function IPFSUpload({ onUploadComplete }: IPFSUploadProps) {
             >
               {isUploading ? '上传中...' : '上传到IPFS'}
             </Button>
-            <Button variant="outline" onClick={resetForm}>
+            <Button variant="secondary" onClick={resetForm}>
               重置
             </Button>
           </div>

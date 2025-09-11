@@ -17,7 +17,7 @@ export default function Stage1() {
   
   if (!mounted) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50">
         <div className="container mx-auto px-4 py-8">
           <div className="text-center">
             <p>正在加载...</p>
@@ -28,7 +28,7 @@ export default function Stage1() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50">
       <div className="container mx-auto px-4 py-8">
         <header className="text-center mb-8">
           <h1 className="text-4xl font-bold text-gray-900 mb-4">
@@ -41,9 +41,9 @@ export default function Stage1() {
 
         <Navigation />
 
-        <main className="max-w-6xl mx-auto">
+        <div className="container mx-auto px-4">
           {!isConnected ? (
-            <div className="max-w-4xl mx-auto">
+            <div className="max-w-7xl mx-auto">
               <div className="grid md:grid-cols-2 gap-8">
                 <div>
                   <WalletConnect />
@@ -135,7 +135,7 @@ export default function Stage1() {
               </div>
             </div>
           )}
-        </main>
+        </div>
 
         <footer className="text-center mt-16 text-gray-600">
           <p>© 2024 RWA代币系统 - 个人技术实践项目</p>

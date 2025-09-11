@@ -18,12 +18,14 @@ export function FullNavigation() {
   // 避免hydration错误
   if (!mounted) {
     return (
-      <div className="w-full max-w-7xl mx-auto p-6">
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">RWA项目开发路线</h1>
-          <p className="text-gray-600">现实世界资产代币化系统 - 分阶段开发计划</p>
+      <div className="w-full">
+        <div className="py-6">
+          <div className="mb-8">
+            <h1 className="text-3xl font-bold text-gray-900 mb-2">RWA项目开发路线</h1>
+            <p className="text-gray-600">现实世界资产代币化系统 - 分阶段开发计划</p>
+          </div>
+          <div className="text-center">正在加载导航...</div>
         </div>
-        <div className="text-center">正在加载导航...</div>
       </div>
     )
   }
@@ -81,7 +83,7 @@ export function FullNavigation() {
   }
 
   return (
-    <div className="w-full max-w-7xl mx-auto">
+    <div className="w-full">
       {/* 阶段导航 */}
       <Card className="border-0 shadow-lg bg-white/80 backdrop-blur-sm mb-8">
         <CardHeader>
