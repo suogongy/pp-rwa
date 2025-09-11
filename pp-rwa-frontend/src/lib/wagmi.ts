@@ -3041,16 +3041,16 @@ export const RWAUpgradeableProxy_ABI = [
 ] as const
 
 // 合约地址 - 从环境变量读取，如果没有则使用默认值
-export const RWA20_ADDRESS = process.env.NEXT_PUBLIC_RWA20_ADDRESS || '0x5FbDB2315678afecb367f032d93F642f64180aa3' // 本地anvil地址，部署后请替换为实际地址
-export const RWA721_ADDRESS = process.env.NEXT_PUBLIC_RWA721_ADDRESS || '0x4A679253410272dd5232B3Ff7cF5dbB88f295319' // 本地anvil地址，部署后请替换为实际地址 
-export const RWAStaking_ADDRESS = process.env.NEXT_PUBLIC_RWA_STAKING_ADDRESS || '0x59b670e9fA9D0A427751Af201D676719a970857b' // 本地anvil地址，部署后请替换为实际地址
+export const RWA20_ADDRESS = process.env.NEXT_PUBLIC_RWA20_ADDRESS // 本地anvil地址，部署后请替换为实际地址
+export const RWA721_ADDRESS = process.env.NEXT_PUBLIC_RWA721_ADDRESS // 本地anvil地址，部署后请替换为实际地址 
+export const RWAStaking_ADDRESS = process.env.NEXT_PUBLIC_RWA_STAKING_ADDRESS // 本地anvil地址，部署后请替换为实际地址
 
 // Phase 3 合约地址
-export const RWA1155_ADDRESS = process.env.NEXT_PUBLIC_RWA1155_ADDRESS || '0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0' // 本地anvil地址，部署后请替换为实际地址
-export const RWAGovernor_ADDRESS = process.env.NEXT_PUBLIC_RWA_GOVERNOR_ADDRESS || '0xCf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9' // 本地anvil地址，部署后请替换为实际地址
-export const RWAMultisigWallet_ADDRESS = process.env.NEXT_PUBLIC_RWA_MULTISIG_WALLET_ADDRESS || '0xDc64a140Aa3E981100a9becA4E685f962f0cF6C9' // 本地anvil地址，部署后请替换为实际地址
-export const RWAOracle_ADDRESS = process.env.NEXT_PUBLIC_RWA_ORACLE_ADDRESS || '0x5FC8d32690cc91D4c39d9d3aBCBD9c5841c5EAf8' // 本地anvil地址，部署后请替换为实际地址
-export const RWAUpgradeableProxy_ADDRESS = process.env.NEXT_PUBLIC_RWA_UPGRADEABLE_PROXY_ADDRESS || '0x0165878A594ca255338adfa4d484Bf6932bA9eBd' // 本地anvil地址，部署后请替换为实际地址
+export const RWA1155_ADDRESS = process.env.NEXT_PUBLIC_RWA1155_ADDRESS // 本地anvil地址，部署后请替换为实际地址
+export const RWAGovernor_ADDRESS = process.env.NEXT_PUBLIC_RWA_GOVERNOR_ADDRESS // 本地anvil地址，部署后请替换为实际地址
+export const RWAMultisigWallet_ADDRESS = process.env.NEXT_PUBLIC_RWA_MULTISIG_WALLET_ADDRESS // 本地anvil地址，部署后请替换为实际地址
+export const RWAOracle_ADDRESS = process.env.NEXT_PUBLIC_RWA_ORACLE_ADDRESS // 本地anvil地址，部署后请替换为实际地址
+export const RWAUpgradeableProxy_ADDRESS = process.env.NEXT_PUBLIC_RWA_UPGRADEABLE_PROXY_ADDRESS // 本地anvil地址，部署后请替换为实际地址
 
 // 合约配置对象
 export const rwa20Contract = {

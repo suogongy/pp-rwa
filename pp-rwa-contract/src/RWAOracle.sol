@@ -209,4 +209,9 @@ contract RWAOracle is Ownable {
     function getAssetValuationCount() external view returns (uint256) {
         return assetValuationIds.length;
     }
+    
+    /**
+     * @dev 接收ETH
+     */
+    receive() external payable {}
 }

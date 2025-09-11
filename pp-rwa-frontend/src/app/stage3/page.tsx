@@ -9,7 +9,18 @@ import { MultisigManagement } from '@/components/stage3/MultisigManagement'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Button } from '@/components/ui/button'
+import { Badge } from '@/components/ui/badge'
 import Link from 'next/link'
+import { 
+  RWA20_ADDRESS, 
+  RWA721_ADDRESS, 
+  RWAStaking_ADDRESS,
+  RWA1155_ADDRESS,
+  RWAGovernor_ADDRESS,
+  RWAMultisigWallet_ADDRESS,
+  RWAOracle_ADDRESS,
+  RWAUpgradeableProxy_ADDRESS
+} from '@/lib/wagmi'
 
 export default function Stage3Page() {
   const { isConnected, address } = useAccount()
@@ -90,6 +101,94 @@ export default function Stage3Page() {
                       <div className="flex items-center justify-between">
                         <span className="text-sm">可升级合约</span>
                         <span className="px-2 py-1 text-xs font-medium text-white bg-green-500 rounded">Upgradeable</span>
+                      </div>
+                    </CardContent>
+                  </Card>
+                  
+                  <Card className="mt-6">
+                    <CardHeader>
+                      <CardTitle>合约地址</CardTitle>
+                      <CardDescription>已部署的智能合约地址</CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-3">
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm font-medium">RWA20</span>
+                          <Badge variant="outline">ERC-20</Badge>
+                        </div>
+                        <div className="text-xs text-gray-600 font-mono break-all">
+                          {RWA20_ADDRESS || '未配置'}
+                        </div>
+                      </div>
+                      
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm font-medium">RWA721</span>
+                          <Badge variant="outline">ERC-721</Badge>
+                        </div>
+                        <div className="text-xs text-gray-600 font-mono break-all">
+                          {RWA721_ADDRESS || '未配置'}
+                        </div>
+                      </div>
+                      
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm font-medium">RWAStaking</span>
+                          <Badge variant="outline">质押</Badge>
+                        </div>
+                        <div className="text-xs text-gray-600 font-mono break-all">
+                          {RWAStaking_ADDRESS || '未配置'}
+                        </div>
+                      </div>
+                      
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm font-medium">RWA1155</span>
+                          <Badge variant="outline">多代币</Badge>
+                        </div>
+                        <div className="text-xs text-gray-600 font-mono break-all">
+                          {RWA1155_ADDRESS || '未配置'}
+                        </div>
+                      </div>
+                      
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm font-medium">RWAGovernor</span>
+                          <Badge variant="outline">治理</Badge>
+                        </div>
+                        <div className="text-xs text-gray-600 font-mono break-all">
+                          {RWAGovernor_ADDRESS || '未配置'}
+                        </div>
+                      </div>
+                      
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm font-medium">RWAMultisigWallet</span>
+                          <Badge variant="outline">多重签名</Badge>
+                        </div>
+                        <div className="text-xs text-gray-600 font-mono break-all">
+                          {RWAMultisigWallet_ADDRESS || '未配置'}
+                        </div>
+                      </div>
+                      
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm font-medium">RWAOracle</span>
+                          <Badge variant="outline">预言机</Badge>
+                        </div>
+                        <div className="text-xs text-gray-600 font-mono break-all">
+                          {RWAOracle_ADDRESS || '未配置'}
+                        </div>
+                      </div>
+                      
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm font-medium">RWAUpgradeableProxy</span>
+                          <Badge variant="outline">代理</Badge>
+                        </div>
+                        <div className="text-xs text-gray-600 font-mono break-all">
+                          {RWAUpgradeableProxy_ADDRESS || '未配置'}
+                        </div>
                       </div>
                     </CardContent>
                   </Card>

@@ -87,6 +87,9 @@ contract RWAMultisigWallet is Ownable, EIP712 {
     mapping(address => Signer) public signers;
     mapping(address => bool) public isSigner;
     
+    // 所有签名者地址数组
+    address[] private allSigners;
+    
     // 交易映射
     mapping(uint256 => Transaction) public transactions;
     mapping(uint256 => mapping(address => bool)) public signatures;
@@ -143,6 +146,7 @@ contract RWAMultisigWallet is Ownable, EIP712 {
                 transactionCount: 0
             });
             isSigner[signer] = true;
+            allSigners.push(signer);
             signerCount++;
             
             emit SignerAdded(signer);
@@ -444,6 +448,7 @@ contract RWAMultisigWallet is Ownable, EIP712 {
             transactionCount: 0
         });
         isSigner[newSigner] = true;
+        allSigners.push(newSigner);
         signerCount++;
         
         emit SignerAdded(newSigner);
@@ -460,6 +465,16 @@ contract RWAMultisigWallet is Ownable, EIP712 {
         delete signers[signerToRemove];
         isSigner[signerToRemove] = false;
         signerCount--;
+        
+        // 从地址数组中移除签名者
+        for (uint256 i = 0; i < allSigners.length; i++) {
+            if (allSigners[i] == signerToRemove) {
+                // 将最后一个元素移到当前位置，然后删除最后一个元素
+                allSigners[i] = allSigners[allSigners.length - 1];
+                allSigners.pop();
+                break;
+            }
+        }
         
         // 如果签名者数量少于阈值，调整阈值
         if (signatureThreshold > signerCount) {
@@ -576,20 +591,26 @@ contract RWAMultisigWallet is Ownable, EIP712 {
      * @return 活跃签名者地址数组
      */
     function getActiveSigners() external view returns (address[] memory) {
-        address[] memory activeSigners = new address[](signerCount);
+        // 首先计算活跃签名者数量
+        uint256 activeCount = 0;
+        for (uint256 i = 0; i < allSigners.length; i++) {
+            address signer = allSigners[i];
+            if (isSigner[signer] && signers[signer].active) {
+                activeCount++;
+            }
+        }
+        
+        // 创建正确大小的数组
+        address[] memory activeSigners = new address[](activeCount);
         uint256 index = 0;
         
-        for (uint256 i = 0; i < signerCount; i++) {
-            address signer = address(uint160(i + 1));
+        // 填充活跃签名者
+        for (uint256 i = 0; i < allSigners.length; i++) {
+            address signer = allSigners[i];
             if (isSigner[signer] && signers[signer].active) {
                 activeSigners[index] = signer;
                 index++;
             }
-        }
-        
-        // 调整数组大小
-        assembly {
-            mstore(activeSigners, index)
         }
         
         return activeSigners;
@@ -602,6 +623,14 @@ contract RWAMultisigWallet is Ownable, EIP712 {
      */
     function isActiveSigner(address account) external view returns (bool) {
         return isSigner[account] && signers[account].active;
+    }
+    
+    /**
+     * @dev 获取合约余额
+     * @return 合约ETH余额
+     */
+    function getBalance() external view returns (uint256) {
+        return address(this).balance;
     }
     
     /**

@@ -10,45 +10,64 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Badge } from '@/components/ui/badge'
 
-interface Transaction {
-  id: bigint
-  destination: string
-  value: bigint
-  data: string
-  executed: boolean
-  confirmations: number
-  requiredConfirmations: number
-}
-
 export function MultisigManagement({ address }: { address: string }) {
-  const [transactions, setTransactions] = useState<Transaction[]>([])
   const [newTransactionDestination, setNewTransactionDestination] = useState('')
   const [newTransactionValue, setNewTransactionValue] = useState('')
   const [newTransactionData, setNewTransactionData] = useState('')
+  const [debugInfo, setDebugInfo] = useState<string>('')
 
   const { writeContract, isPending, data: hash } = useWriteContract()
   const { isLoading: isConfirming, isSuccess: isConfirmed } = useWaitForTransactionReceipt({ hash })
 
   // 读取所有者列表
-  const { data: owners } = useReadContract({
+  const { data: owners, error: ownersError, isLoading: ownersLoading } = useReadContract({
     address: RWAMultisigWallet_ADDRESS,
     abi: RWAMultisigWallet_ABI,
-    functionName: 'getOwners',
+    functionName: 'getActiveSigners',
+    query: {
+      enabled: !!RWAMultisigWallet_ADDRESS,
+    }
   })
 
   // 读取所需确认数
-  const { data: requiredConfirmations } = useReadContract({
+  const { data: requiredConfirmations, error: thresholdError } = useReadContract({
     address: RWAMultisigWallet_ADDRESS,
     abi: RWAMultisigWallet_ABI,
-    functionName: 'required',
+    functionName: 'signatureThreshold',
+    query: {
+      enabled: !!RWAMultisigWallet_ADDRESS,
+    }
   })
 
-  // 读取交易数量
-  const { data: transactionCount } = useReadContract({
-    address: RWAMultisigWallet_ADDRESS,
-    abi: RWAMultisigWallet_ABI,
-    functionName: 'transactionCount',
-  })
+  // 添加调试信息和网络切换提示
+  useEffect(() => {
+    const chainId = window.ethereum?.chainId || '未知'
+    const networkName = chainId === '0x7a69' ? 'Local (31337)' : chainId === '0xaa36a7' ? 'Sepolia (11155111)' : `${chainId} (未知网络)`
+    const expectedChainId = '0x7a69' // 31337 in hex
+    
+    let debugMsg = `合约地址: ${RWAMultisigWallet_ADDRESS || '未配置'}\n当前用户: ${address || '未连接'}\n当前网络: ${networkName}\n期望网络: Local (31337)\n签名者加载中: ${ownersLoading}\n签名者错误: ${ownersError?.message || '无'}\n阈值错误: ${thresholdError?.message || '无'}`
+    
+    if (chainId !== expectedChainId && chainId !== '未知') {
+      debugMsg += '\n\n⚠️ 警告: 当前网络不正确！'
+      debugMsg += '\n请切换到 Localhost:8545 网络 (Chain ID: 31337)'
+    }
+    
+    setDebugInfo(debugMsg)
+  }, [address, ownersLoading, ownersError, thresholdError])
+
+  // 自动切换网络功能
+  const switchToCorrectNetwork = async () => {
+    if (window.ethereum) {
+      try {
+        await window.ethereum.request({
+          method: 'wallet_switchEthereumChain',
+          params: [{ chainId: '0x7a69' }], // 31337 in hex
+        })
+      } catch (error) {
+        console.error('切换网络失败:', error)
+      }
+    }
+  }
 
   // 读取合约余额
   const { data: contractBalance } = useReadContract({
@@ -69,7 +88,7 @@ export function MultisigManagement({ address }: { address: string }) {
   const { data: isOwner } = useReadContract({
     address: RWAMultisigWallet_ADDRESS,
     abi: RWAMultisigWallet_ABI,
-    functionName: 'isOwner',
+    functionName: 'isActiveSigner',
     args: [address as `0x${string}`],
   })
 
@@ -81,11 +100,11 @@ export function MultisigManagement({ address }: { address: string }) {
       writeContract({
         address: RWAMultisigWallet_ADDRESS,
         abi: RWAMultisigWallet_ABI,
-        functionName: 'submitTransaction',
+        functionName: 'createEtherTransaction',
         args: [
           newTransactionDestination as `0x${string}`,
           newTransactionValue ? BigInt(newTransactionValue) : 0n,
-          newTransactionData || '0x',
+          BigInt(Math.floor(Date.now() / 1000) + 86400), // 24小时后过期
         ],
       })
     } catch (error) {
@@ -99,8 +118,8 @@ export function MultisigManagement({ address }: { address: string }) {
       writeContract({
         address: RWAMultisigWallet_ADDRESS,
         abi: RWAMultisigWallet_ABI,
-        functionName: 'confirmTransaction',
-        args: [transactionId],
+        functionName: 'signTransaction',
+        args: [transactionId, '0x'], // 签名需要根据实际情况调整
       })
     } catch (error) {
       console.error('确认交易失败:', error)
@@ -121,20 +140,7 @@ export function MultisigManagement({ address }: { address: string }) {
     }
   }
 
-  // 撤销确认
-  const handleRevokeConfirmation = async (transactionId: bigint) => {
-    try {
-      writeContract({
-        address: RWAMultisigWallet_ADDRESS,
-        abi: RWAMultisigWallet_ABI,
-        functionName: 'revokeConfirmation',
-        args: [transactionId],
-      })
-    } catch (error) {
-      console.error('撤销确认失败:', error)
-    }
-  }
-
+  
   useEffect(() => {
     if (isConfirmed) {
       setNewTransactionDestination('')
@@ -145,16 +151,43 @@ export function MultisigManagement({ address }: { address: string }) {
 
   return (
     <div className="space-y-6">
+      {/* 调试信息 */}
+      <Card className="bg-gray-50">
+        <CardHeader>
+          <CardTitle className="text-sm">调试信息</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <pre className="text-xs bg-white p-2 rounded border overflow-auto">
+            {debugInfo}
+          </pre>
+          <div className="mt-2 text-xs text-gray-600">
+            签名者数据: {owners ? JSON.stringify(owners, null, 2) : '无数据'}
+          </div>
+          {(window.ethereum?.chainId !== '0x7a69') && (
+            <Button 
+              onClick={switchToCorrectNetwork} 
+              size="sm" 
+              className="mt-2 w-full"
+            >
+              切换到本地网络 (31337)
+            </Button>
+          )}
+        </CardContent>
+      </Card>
+
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <Card>
           <CardHeader className="pb-3">
-            <CardTitle className="text-lg">所有者数量</CardTitle>
+            <CardTitle className="text-lg">签名者数量</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-blue-600">
-              {owners ? owners.length : '0'}/{requiredConfirmations?.toString() || '0'}
+              {ownersLoading ? '加载中...' : owners ? owners.length : '0'}/{requiredConfirmations?.toString() || '0'}
             </div>
-            <p className="text-sm text-gray-600">所需/总数</p>
+            <p className="text-sm text-gray-600">当前/阈值</p>
+            {ownersError && (
+              <p className="text-xs text-red-600 mt-1">错误: {ownersError.message}</p>
+            )}
           </CardContent>
         </Card>
 
@@ -176,7 +209,7 @@ export function MultisigManagement({ address }: { address: string }) {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-orange-600">
-              {transactions.filter(t => !t.executed && t.confirmations < t.requiredConfirmations).length}
+              0
             </div>
             <p className="text-sm text-gray-600">待处理</p>
           </CardContent>
@@ -250,15 +283,15 @@ export function MultisigManagement({ address }: { address: string }) {
 
       <Card>
         <CardHeader>
-          <CardTitle>所有者列表</CardTitle>
-          <CardDescription>当前多重签名钱包的所有者</CardDescription>
+          <CardTitle>签名者列表</CardTitle>
+          <CardDescription>当前多重签名钱包的签名者</CardDescription>
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
             {owners?.map((owner, index) => (
               <div key={owner} className="flex items-center justify-between p-3 border rounded-lg">
                 <span className="text-sm font-medium truncate">{owner}</span>
-                <Badge variant="outline">所有者 {index + 1}</Badge>
+                <Badge variant="outline">签名者 {index + 1}</Badge>
               </div>
             ))}
           </div>
@@ -267,75 +300,22 @@ export function MultisigManagement({ address }: { address: string }) {
 
       <Card>
         <CardHeader>
-          <CardTitle>交易列表</CardTitle>
-          <CardDescription>查看和管理交易</CardDescription>
+          <CardTitle>交易管理</CardTitle>
+          <CardDescription>创建和管理多重签名交易</CardDescription>
         </CardHeader>
         <CardContent>
           <div className="space-y-4">
-            {transactions.length === 0 ? (
-              <p className="text-gray-500 text-center py-8">暂无交易</p>
-            ) : (
-              transactions.map((transaction) => (
-                <div key={transaction.id.toString()} className="border rounded-lg p-4">
-                  <div className="flex justify-between items-start mb-3">
-                    <div>
-                      <h4 className="font-semibold">交易 #{transaction.id.toString()}</h4>
-                      <p className="text-sm text-gray-600">目标: {transaction.destination}</p>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <Badge variant={transaction.executed ? 'default' : 'secondary'}>
-                        {transaction.executed ? '已执行' : '待确认'}
-                      </Badge>
-                      <span className="text-sm text-gray-600">
-                        {transaction.confirmations}/{transaction.requiredConfirmations}
-                      </span>
-                    </div>
-                  </div>
-                  
-                  <div className="grid grid-cols-2 gap-4 text-sm mb-3">
-                    <div>
-                      <span className="font-medium">金额: </span>
-                      <span>{(Number(transaction.value) / 1e18).toFixed(6)} ETH</span>
-                    </div>
-                    <div>
-                      <span className="font-medium">数据: </span>
-                      <span className="font-mono text-xs">
-                        {transaction.data === '0x' ? '无' : transaction.data.slice(0, 20) + '...'}
-                      </span>
-                    </div>
-                  </div>
-                  
-                  <div className="flex gap-2">
-                    {!transaction.executed && isOwner && (
-                      <>
-                        <Button
-                          size="sm"
-                          onClick={() => handleConfirmTransaction(transaction.id)}
-                          disabled={transaction.confirmations >= transaction.requiredConfirmations}
-                        >
-                          确认
-                        </Button>
-                        {transaction.confirmations >= transaction.requiredConfirmations && (
-                          <Button
-                            size="sm"
-                            onClick={() => handleExecuteTransaction(transaction.id)}
-                          >
-                            执行
-                          </Button>
-                        )}
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => handleRevokeConfirmation(transaction.id)}
-                        >
-                          撤销
-                        </Button>
-                      </>
-                    )}
-                  </div>
-                </div>
-              ))
-            )}
+            <p className="text-gray-500 text-center py-8">
+              交易功能需要先部署多重签名合约并添加签名者
+            </p>
+            <div className="text-center">
+              <p className="text-sm text-gray-600 mb-2">
+                当前状态: {RWAMultisigWallet_ADDRESS ? '合约已配置' : '合约未配置'}
+              </p>
+              <p className="text-sm text-gray-600">
+                签名者数量: {owners ? owners.length : 0}
+              </p>
+            </div>
           </div>
         </CardContent>
       </Card>
