@@ -57,67 +57,151 @@ export function GovernanceManagement({ address }: { address: string }) {
 
   // 创建提案
   const handleCreateProposal = async () => {
-    if (!newProposalDescription || !newProposalTarget) return
+    if (!newProposalDescription || !newProposalTarget) {
+      console.warn('🚫 创建提案失败: 描述或目标地址为空')
+      return
+    }
+
+    console.log('🗳️ 开始创建治理提案:')
+    console.log('  提案描述:', newProposalDescription)
+    console.log('  目标地址:', newProposalTarget)
+    console.log('  价值:', newProposalValue || '0', 'ETH')
+    console.log('  调用数据:', newProposalCalldata || '0x')
+    console.log('  合约地址:', RWAGovernor_ADDRESS)
+    console.log('  提案者:', address)
 
     try {
+      const proposalArgs = [
+        [newProposalTarget as `0x${string}`],
+        [newProposalValue ? BigInt(newProposalValue) : 0n],
+        [newProposalCalldata || '0x'],
+        newProposalDescription,
+      ]
+      
+      console.log('📝 提案参数:', proposalArgs)
+      
       writeContract({
         address: RWAGovernor_ADDRESS,
         abi: RWAGovernor_ABI,
         functionName: 'propose',
-        args: [
-          [newProposalTarget as `0x${string}`],
-          [newProposalValue ? BigInt(newProposalValue) : 0n],
-          [newProposalCalldata || '0x'],
-          newProposalDescription,
-        ],
+        args: proposalArgs,
       })
+      
+      console.log('✅ 提案创建交易已发送到区块链，等待确认...')
+      
     } catch (error) {
-      console.error('创建提案失败:', error)
+      console.error('❌ 创建提案失败:', error)
+      console.error('错误详情:', {
+        message: error instanceof Error ? error.message : '未知错误',
+        stack: error instanceof Error ? error.stack : '无堆栈信息',
+        code: (error as any)?.code,
+        data: (error as any)?.data
+      })
     }
   }
 
   // 投票
   const handleVote = async (proposalId: bigint, support: number) => {
+    console.log('🗳️ 开始为提案投票:')
+    console.log('  提案ID:', proposalId.toString())
+    console.log('  投票类型:', support === 0 ? '反对' : support === 1 ? '赞成' : support === 2 ? '弃权' : '未知')
+    console.log('  投票者:', address)
+    console.log('  合约地址:', RWAGovernor_ADDRESS)
+
     try {
+      const voteArgs = [proposalId, support]
+      console.log('📝 投票参数:', voteArgs)
+      
       writeContract({
         address: RWAGovernor_ADDRESS,
         abi: RWAGovernor_ABI,
         functionName: 'castVote',
-        args: [proposalId, support],
+        args: voteArgs,
       })
+      
+      console.log('✅ 投票交易已发送到区块链，等待确认...')
+      
     } catch (error) {
-      console.error('投票失败:', error)
+      console.error('❌ 投票失败:', error)
+      console.error('错误详情:', {
+        message: error instanceof Error ? error.message : '未知错误',
+        stack: error instanceof Error ? error.stack : '无堆栈信息',
+        code: (error as any)?.code,
+        data: (error as any)?.data
+      })
     }
   }
 
   // 执行提案
   const handleExecute = async (proposalId: bigint) => {
+    console.log('🚀 开始执行治理提案:')
+    console.log('  提案ID:', proposalId.toString())
+    console.log('  执行者:', address)
+    console.log('  合约地址:', RWAGovernor_ADDRESS)
+    console.log('  目标地址:', newProposalTarget)
+    console.log('  价值:', newProposalValue || '0', 'ETH')
+    console.log('  调用数据:', newProposalCalldata || '0x')
+    console.log('  描述:', newProposalDescription)
+
     try {
+      const executeArgs = [
+        [newProposalTarget as `0x${string}`],
+        [newProposalValue ? BigInt(newProposalValue) : 0n],
+        [newProposalCalldata || '0x'],
+        newProposalDescription,
+        proposalId,
+      ]
+      
+      console.log('📝 执行参数:', executeArgs)
+      
       writeContract({
         address: RWAGovernor_ADDRESS,
         abi: RWAGovernor_ABI,
         functionName: 'execute',
-        args: [
-          [newProposalTarget as `0x${string}`],
-          [newProposalValue ? BigInt(newProposalValue) : 0n],
-          [newProposalCalldata || '0x'],
-          newProposalDescription,
-          proposalId,
-        ],
+        args: executeArgs,
       })
+      
+      console.log('✅ 提案执行交易已发送到区块链，等待确认...')
+      
     } catch (error) {
-      console.error('执行提案失败:', error)
+      console.error('❌ 执行提案失败:', error)
+      console.error('错误详情:', {
+        message: error instanceof Error ? error.message : '未知错误',
+        stack: error instanceof Error ? error.stack : '无堆栈信息',
+        code: (error as any)?.code,
+        data: (error as any)?.data
+      })
     }
   }
 
-  useEffect(() => {
-    if (isConfirmed) {
-      setNewProposalDescription('')
-      setNewProposalTarget('')
-      setNewProposalValue('')
-      setNewProposalCalldata('')
-    }
-  }, [isConfirmed])
+  // 添加治理状态监听日志
+useEffect(() => {
+  console.log('📊 治理合约状态更新:')
+  console.log('  提案数量:', proposalCount?.toString())
+  console.log('  当前用户地址:', address)
+  console.log('  投票权重:', tokenBalance?.toString())
+  console.log('  合约地址:', RWAGovernor_ADDRESS)
+}, [proposalCount, address, tokenBalance])
+
+// 添加交易状态日志
+useEffect(() => {
+  if (isConfirmed) {
+    console.log('✅ 治理交易已确认，交易哈希:', hash)
+    console.log('🧹 清空表单数据')
+    setNewProposalDescription('')
+    setNewProposalTarget('')
+    setNewProposalValue('')
+    setNewProposalCalldata('')
+  }
+}, [isConfirmed, hash])
+
+// 添加加载状态日志
+useEffect(() => {
+  console.log('⏳ 治理合约操作状态:')
+  console.log('  提案提交中:', isPending)
+  console.log('  提案确认中:', isConfirming)
+  console.log('  提案已确认:', isConfirmed)
+}, [isPending, isConfirming, isConfirmed])
 
   return (
     <div className="space-y-6">

@@ -6,6 +6,7 @@ import { Navigation } from '@/components/Navigation'
 import { WalletConnect } from '@/components/WalletConnect'
 import { GovernanceManagement } from '@/components/stage3/GovernanceManagement'
 import { MultisigManagement } from '@/components/stage3/MultisigManagement'
+import { OracleManagement } from '@/components/stage3/OracleManagement'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Button } from '@/components/ui/button'
@@ -213,32 +214,7 @@ export default function Stage3Page() {
                     </TabsContent>
                     
                     <TabsContent value="oracle" className="mt-6">
-                      <Card>
-                        <CardHeader>
-                          <CardTitle>预言机系统</CardTitle>
-                          <CardDescription>链下数据喂送和随机数</CardDescription>
-                        </CardHeader>
-                        <CardContent>
-                          <div className="space-y-4">
-                            <div className="grid grid-cols-2 gap-4">
-                              <div className="p-4 bg-yellow-50 rounded-lg">
-                                <h4 className="font-semibold text-yellow-900">ETH价格</h4>
-                                <p className="text-2xl font-bold text-yellow-600">$0</p>
-                                <p className="text-sm text-yellow-600">USD</p>
-                              </div>
-                              <div className="p-4 bg-red-50 rounded-lg">
-                                <h4 className="font-semibold text-red-900">随机数</h4>
-                                <p className="text-2xl font-bold text-red-600">0</p>
-                                <p className="text-sm text-red-600">最新随机数</p>
-                              </div>
-                            </div>
-                            <div className="space-y-2">
-                              <Button className="w-full">请求价格数据</Button>
-                              <Button variant="outline" className="w-full">生成随机数</Button>
-                            </div>
-                          </div>
-                        </CardContent>
-                      </Card>
+                      <OracleManagement address={address || ''} />
                     </TabsContent>
                     
                     <TabsContent value="erc1155" className="mt-6">

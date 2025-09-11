@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useEffect } from 'react';
-import { useAccount, useWriteContract, useReadContract } from 'wagmi';
+import { useState, useEffect, useCallback } from 'react';
+import { useAccount, useWriteContract, useReadContract, useWaitForTransactionReceipt, useWatchContractEvent } from 'wagmi';
 import { parseEther, formatEther } from 'viem';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -31,26 +31,27 @@ import {
   Calendar
 } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
+import { RWAMultisigWallet_ADDRESS, RWAMultisigWallet_ABI } from '@/lib/wagmi';
 
 interface Transaction {
-  id: number;
+  id: bigint;
   type: 'ETHER_TRANSFER' | 'ERC20_TRANSFER' | 'ERC721_TRANSFER' | 'ERC1155_TRANSFER' | 'CONTRACT_CALL' | 'BATCH_TRANSFER';
   destination: string;
-  value: string;
+  value: bigint;
   data: string;
   status: 'PENDING' | 'EXECUTED' | 'CANCELLED';
-  signatures: { signer: string; timestamp: number }[];
-  createdAt: number;
-  deadline: number;
+  signatures: { signer: string; timestamp: bigint }[];
+  createdAt: bigint;
+  deadline: bigint;
   executor?: string;
-  gasUsed?: number;
+  gasUsed?: bigint;
 }
 
 interface Signer {
   address: string;
   active: boolean;
-  joinedAt: number;
-  transactionCount: number;
+  joinedAt: bigint;
+  transactionCount: bigint;
 }
 
 interface Asset {
@@ -69,7 +70,7 @@ const RWAMultisigWallet = () => {
   const [assets, setAssets] = useState<Asset[]>([]);
   const [selectedTransaction, setSelectedTransaction] = useState<Transaction | null>(null);
   const [isCreatingTransaction, setIsCreatingTransaction] = useState(false);
-  const [signatureThreshold, setSignatureThreshold] = useState<number>(2);
+  const [signatureThreshold, setSignatureThreshold] = useState<bigint>(2n);
   const [newTransaction, setNewTransaction] = useState({
     type: 'ETHER_TRANSFER' as const,
     destination: '',
@@ -80,212 +81,262 @@ const RWAMultisigWallet = () => {
     deadline: '',
   });
 
-  const walletAddress = '0x1234567890123456789012345678901234567890';
+  const { writeContract, isPending, data: hash } = useWriteContract();
+  const { isLoading: isConfirming, isSuccess: isConfirmed } = useWaitForTransactionReceipt({ hash });
 
-  const { writeContract } = useWriteContract();
+  // 获取签名者列表
+  const { data: owners, error: ownersError, isLoading: ownersLoading } = useReadContract({
+    address: RWAMultisigWallet_ADDRESS,
+    abi: RWAMultisigWallet_ABI,
+    functionName: 'getActiveSigners',
+    query: {
+      enabled: !!RWAMultisigWallet_ADDRESS,
+    }
+  });
 
-  // 模拟数据
+  // 获取签名阈值
+  const { data: threshold, error: thresholdError } = useReadContract({
+    address: RWAMultisigWallet_ADDRESS,
+    abi: RWAMultisigWallet_ABI,
+    functionName: 'signatureThreshold',
+    query: {
+      enabled: !!RWAMultisigWallet_ADDRESS,
+    }
+  });
+
+  // 获取合约余额
+  const { data: contractBalance } = useReadContract({
+    address: RWAMultisigWallet_ADDRESS,
+    abi: [
+      {
+        inputs: [],
+        name: 'getBalance',
+        outputs: [{ name: '', type: 'uint256' }],
+        stateMutability: 'view',
+        type: 'function',
+      },
+    ],
+    functionName: 'getBalance',
+  });
+
+  // 获取交易详情
+  const getTransactionDetails = useCallback(async (transactionId: bigint): Promise<Transaction | null> => {
+    try {
+      const txData = await fetch(`/api/transaction/${transactionId.toString()}`).then(res => res.json());
+      
+      if (!txData) return null;
+
+      return {
+        id: transactionId,
+        type: txData.transactionType,
+        destination: txData.destination,
+        value: BigInt(txData.value),
+        data: txData.data,
+        status: txData.status === 0 ? 'PENDING' : txData.status === 1 ? 'EXECUTED' : 'CANCELLED',
+        signatures: txData.signatures || [],
+        createdAt: BigInt(txData.timestamp),
+        deadline: BigInt(txData.deadline),
+        executor: txData.executor,
+        gasUsed: txData.gasUsed ? BigInt(txData.gasUsed) : undefined,
+      };
+    } catch (error) {
+      console.error(`获取交易 ${transactionId.toString()} 详情失败:`, error);
+      return null;
+    }
+  }, []);
+
+  // 加载交易列表
+  const loadTransactions = useCallback(async () => {
+    try {
+      console.log('加载交易列表...');
+      const loadedTransactions: Transaction[] = [];
+      
+      // 遍历可能存在的交易ID
+      for (let i = 1; i <= 50; i++) {
+        const txDetails = await getTransactionDetails(BigInt(i));
+        if (txDetails) {
+          loadedTransactions.push(txDetails);
+        }
+      }
+      
+      // 按时间倒序排列
+      loadedTransactions.sort((a, b) => b.createdAt > a.createdAt ? 1 : -1);
+      setTransactions(loadedTransactions);
+      console.log(`成功加载 ${loadedTransactions.length} 笔交易`);
+    } catch (error) {
+      console.error('加载交易列表失败:', error);
+    }
+  }, [getTransactionDetails]);
+
+  // 监听交易事件
+  useWatchContractEvent({
+    address: RWAMultisigWallet_ADDRESS,
+    abi: RWAMultisigWallet_ABI,
+    eventName: 'TransactionCreated',
+    onLogs: () => {
+      console.log('监听到新交易创建');
+      loadTransactions();
+    },
+  });
+
+  useWatchContractEvent({
+    address: RWAMultisigWallet_ADDRESS,
+    abi: RWAMultisigWallet_ABI,
+    eventName: 'TransactionSigned',
+    onLogs: () => {
+      console.log('监听到交易签名');
+      loadTransactions();
+    },
+  });
+
+  useWatchContractEvent({
+    address: RWAMultisigWallet_ADDRESS,
+    abi: RWAMultisigWallet_ABI,
+    eventName: 'TransactionExecuted',
+    onLogs: () => {
+      console.log('监听到交易执行');
+      loadTransactions();
+    },
+  });
+
+  // 初始化数据
   useEffect(() => {
-    const mockTransactions: Transaction[] = [
-      {
-        id: 1,
-        type: 'ETHER_TRANSFER',
-        destination: '0x8765432109876543210987654321098765432109',
-        value: '1.5',
-        data: '',
-        status: 'PENDING',
-        signatures: [
-          { signer: '0x1234...5678', timestamp: Date.now() - 3600000 },
-          { signer: '0x8765...4321', timestamp: Date.now() - 1800000 },
-        ],
-        createdAt: Date.now() - 7200000,
-        deadline: Date.now() + 86400000,
-      },
-      {
-        id: 2,
-        type: 'ERC20_TRANSFER',
-        destination: '0x5555555555555555555555555555555555555555',
-        value: '1000',
-        data: '0xa9059cbb0000000000000000000000005555555555555555555555555555555555555555000000000000000000000000000000000000000000000000000000000003e8',
-        status: 'EXECUTED',
-        signatures: [
-          { signer: '0x1234...5678', timestamp: Date.now() - 86400000 },
-          { signer: '0x8765...4321', timestamp: Date.now() - 82800000 },
-          { signer: '0x1111...2222', timestamp: Date.now() - 79200000 },
-        ],
-        createdAt: Date.now() - 90000000,
-        deadline: Date.now() + 86400000,
-        executor: '0x1234...5678',
-        gasUsed: 45000,
-      },
-      {
-        id: 3,
-        type: 'CONTRACT_CALL',
-        destination: '0x9999999999999999999999999999999999999999',
-        value: '0',
-        data: '0x1234567890abcdef',
-        status: 'CANCELLED',
-        signatures: [
-          { signer: '0x1234...5678', timestamp: Date.now() - 172800000 },
-        ],
-        createdAt: Date.now() - 180000000,
-        deadline: Date.now() + 86400000,
-      },
-    ];
+    if (owners && Array.isArray(owners)) {
+      const formattedSigners: Signer[] = owners.map((owner, index) => ({
+        address: owner,
+        active: true,
+        joinedAt: BigInt(Date.now() - index * 86400000),
+        transactionCount: BigInt(0),
+      }));
+      setSigners(formattedSigners);
+    }
+  }, [owners]);
 
-    const mockSigners: Signer[] = [
-      {
-        address: '0x1234567890123456789012345678901234567890',
-        active: true,
-        joinedAt: Date.now() - 2592000000,
-        transactionCount: 15,
-      },
-      {
-        address: '0x8765432109876543210987654321098765432109',
-        active: true,
-        joinedAt: Date.now() - 2160000000,
-        transactionCount: 12,
-      },
-      {
-        address: '0x1111111111111111111111111111111111111111',
-        active: true,
-        joinedAt: Date.now() - 1728000000,
-        transactionCount: 8,
-      },
-    ];
+  useEffect(() => {
+    if (threshold) {
+      setSignatureThreshold(BigInt(threshold));
+    }
+  }, [threshold]);
 
-    const mockAssets: Asset[] = [
-      {
+  useEffect(() => {
+    if (RWAMultisigWallet_ADDRESS) {
+      loadTransactions();
+    }
+  }, [RWAMultisigWallet_ADDRESS, loadTransactions]);
+
+  // 更新资产列表
+  useEffect(() => {
+    const updatedAssets: Asset[] = [];
+    
+    if (contractBalance) {
+      updatedAssets.push({
         type: 'ETH',
         address: 'native',
         symbol: 'ETH',
-        balance: '2.5',
-      },
-      {
-        type: 'ERC20',
-        address: '0x2222222222222222222222222222222222222222',
-        symbol: 'USDC',
-        balance: '5000',
-        decimals: 6,
-      },
-      {
-        type: 'ERC20',
-        address: '0x3333333333333333333333333333333333333333',
-        symbol: 'RWA',
-        balance: '10000',
-        decimals: 18,
-      },
-    ];
+        balance: formatEther(contractBalance),
+      });
+    }
+    
+    setAssets(updatedAssets);
+  }, [contractBalance]);
 
-    setTransactions(mockTransactions);
-    setSigners(mockSigners);
-    setAssets(mockAssets);
-  }, []);
-
-  const handleSignTransaction = (transactionId: number) => {
-    if (!isConnected) {
+  const handleSignTransaction = async (transactionId: bigint) => {
+    if (!isConnected || !address) {
       alert('请先连接钱包');
       return;
     }
 
-    writeContract({
-      address: walletAddress as `0x${string}`,
-      abi: [
-        {
-          "inputs": [
-            {"internalType": "uint256", "name": "transactionId", "type": "uint256"},
-            {"internalType": "bytes", "name": "signature", "type": "bytes"}
-          ],
-          "name": "signTransaction",
-          "outputs": [],
-          "stateMutability": "nonpayable",
-          "type": "function"
-        }
-      ],
-      functionName: 'signTransaction',
-      args: [BigInt(transactionId), '0x1234567890abcdef'], // 模拟签名
-    });
+    try {
+      // 这里需要实现真实的签名逻辑
+      // 由于签名需要用户的私钥，这里简化处理
+      writeContract({
+        address: RWAMultisigWallet_ADDRESS as `0x${string}`,
+        abi: RWAMultisigWallet_ABI,
+        functionName: 'signTransaction',
+        args: [transactionId, '0x'], // 真实应用中需要生成正确的签名
+      });
+    } catch (error) {
+      console.error('签名失败:', error);
+      alert('签名失败，请查看控制台');
+    }
   };
 
-  const handleExecuteTransaction = (transactionId: number) => {
-    if (!isConnected) {
+  const handleExecuteTransaction = async (transactionId: bigint) => {
+    if (!isConnected || !address) {
       alert('请先连接钱包');
       return;
     }
 
-    writeContract({
-      address: walletAddress as `0x${string}`,
-      abi: [
-        {
-          "inputs": [{"internalType": "uint256", "name": "transactionId", "type": "uint256"}],
-          "name": "executeTransaction",
-          "outputs": [],
-          "stateMutability": "nonpayable",
-          "type": "function"
-        }
-      ],
-      functionName: 'executeTransaction',
-      args: [BigInt(transactionId)],
-    });
+    try {
+      writeContract({
+        address: RWAMultisigWallet_ADDRESS as `0x${string}`,
+        abi: RWAMultisigWallet_ABI,
+        functionName: 'executeTransaction',
+        args: [transactionId],
+      });
+    } catch (error) {
+      console.error('执行失败:', error);
+      alert('执行失败，请查看控制台');
+    }
   };
 
-  const handleCreateTransaction = () => {
-    if (!isConnected || !newTransaction.destination) {
+  const handleCreateTransaction = async () => {
+    if (!isConnected || !address || !newTransaction.destination) {
       alert('请填写完整的交易信息');
       return;
     }
 
-    let data = '';
-    let value = '0';
-    
-    switch (newTransaction.type) {
-      case 'ETHER_TRANSFER':
-        value = newTransaction.amount;
-        break;
-      case 'ERC20_TRANSFER':
-        data = `0xa9059cbb000000000000000000000000${newTransaction.destination.slice(2)}${BigInt(parseEther(newTransaction.amount)).toString(16).padStart(64, '0')}`;
-        break;
-      case 'CONTRACT_CALL':
-        data = newTransaction.callData;
-        value = newTransaction.amount;
-        break;
+    try {
+      let data = '0x';
+      let value = 0n;
+      
+      const deadline = BigInt(Math.floor(Date.now() / 1000) + 86400); // 24小时后过期
+      
+      switch (newTransaction.type) {
+        case 'ETHER_TRANSFER':
+          value = parseEther(newTransaction.amount || '0');
+          break;
+        case 'ERC20_TRANSFER':
+          if (!newTransaction.tokenAddress) {
+            alert('请输入代币地址');
+            return;
+          }
+          // ERC20 transfer function signature
+          data = '0xa9059cbb' + 
+                  newTransaction.destination.slice(2).padStart(64, '0') + 
+                  parseEther(newTransaction.amount || '0').toString(16).padStart(64, '0');
+          break;
+        case 'CONTRACT_CALL':
+          data = newTransaction.callData || '0x';
+          value = parseEther(newTransaction.amount || '0');
+          break;
+      }
+
+      writeContract({
+        address: RWAMultisigWallet_ADDRESS as `0x${string}`,
+        abi: RWAMultisigWallet_ABI,
+        functionName: 'createEtherTransaction',
+        args: [
+          newTransaction.destination as `0x${string}`,
+          value,
+          deadline
+        ],
+      });
+
+      setIsCreatingTransaction(false);
+      setNewTransaction({
+        type: 'ETHER_TRANSFER',
+        destination: '',
+        amount: '',
+        tokenAddress: '',
+        tokenId: '',
+        callData: '',
+        deadline: '',
+      });
+    } catch (error) {
+      console.error('创建交易失败:', error);
+      alert('创建交易失败，请查看控制台');
     }
-
-    writeContract({
-      address: walletAddress as `0x${string}`,
-      abi: [
-        {
-          "inputs": [
-            {"internalType": "address", "name": "destination", "type": "address"},
-            {"internalType": "uint256", "name": "value", "type": "uint256"},
-            {"internalType": "bytes", "name": "data", "type": "bytes"},
-            {"internalType": "uint256", "name": "deadline", "type": "uint256"}
-          ],
-          "name": "createTransaction",
-          "outputs": [{"internalType": "uint256", "name": "", "type": "uint256"}],
-          "stateMutability": "nonpayable",
-          "type": "function"
-        }
-      ],
-      functionName: 'createTransaction',
-      args: [
-        newTransaction.destination as `0x${string}`,
-        parseEther(value),
-        data as `0x${string}`,
-        BigInt(Math.floor(Date.now() / 1000) + 86400) // 24小时后过期
-      ],
-    });
-
-    setIsCreatingTransaction(false);
-    setNewTransaction({
-      type: 'ETHER_TRANSFER',
-      destination: '',
-      amount: '',
-      tokenAddress: '',
-      tokenId: '',
-      callData: '',
-      deadline: '',
-    });
   };
 
   const getTypeIcon = (type: Transaction['type']) => {
@@ -320,17 +371,29 @@ const RWAMultisigWallet = () => {
   };
 
   const canSign = (transaction: Transaction) => {
-    if (!isConnected || transaction.status !== 'PENDING') return false;
-    const signerAddress = address?.toLowerCase();
-    return signers.some(s => s.address.toLowerCase() === signerAddress && s.active) &&
-           !transaction.signatures.some(sig => sig.signer.toLowerCase() === signerAddress);
+    if (!isConnected || !address || transaction.status !== 'PENDING') return false;
+    const signerAddress = address.toLowerCase();
+    return signers.some(s => s.address.toLowerCase() === signerAddress && s.active);
   };
 
   const canExecute = (transaction: Transaction) => {
     return transaction.status === 'PENDING' && 
-           transaction.signatures.length >= signatureThreshold &&
-           new Date(transaction.deadline) > new Date();
+           transaction.signatures.length >= Number(signatureThreshold) &&
+           transaction.deadline > BigInt(Math.floor(Date.now() / 1000));
   };
+
+  if (!RWAMultisigWallet_ADDRESS) {
+    return (
+      <div className="min-h-screen bg-gray-50 py-8">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="text-center">
+            <h1 className="text-4xl font-bold text-gray-900 mb-4">多签钱包未配置</h1>
+            <p className="text-xl text-gray-600">请先部署多重签名钱包合约</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gray-50 py-8">
@@ -349,7 +412,7 @@ const RWAMultisigWallet = () => {
             </CardHeader>
             <CardContent>
               <div className="text-sm font-mono truncate">
-                {walletAddress}
+                {RWAMultisigWallet_ADDRESS}
               </div>
               <p className="text-xs text-muted-foreground">多签钱包</p>
             </CardContent>
@@ -362,7 +425,7 @@ const RWAMultisigWallet = () => {
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">{signers.length}</div>
-              <p className="text-xs text-muted-foreground">{signatureThreshold} 签名阈值</p>
+              <p className="text-xs text-muted-foreground">{signatureThreshold.toString()} 签名阈值</p>
             </CardContent>
           </Card>
 
@@ -386,7 +449,7 @@ const RWAMultisigWallet = () => {
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">
-                {assets.find(a => a.type === 'ETH')?.balance || '0'} ETH
+                {contractBalance ? formatEther(contractBalance) : '0'} ETH
               </div>
               <p className="text-xs text-muted-foreground">主网币</p>
             </CardContent>
@@ -499,8 +562,8 @@ const RWAMultisigWallet = () => {
                       </>
                     )}
 
-                    <Button onClick={handleCreateTransaction} className="w-full">
-                      创建交易
+                    <Button onClick={handleCreateTransaction} className="w-full" disabled={isPending}>
+                      {isPending ? '创建中...' : '创建交易'}
                     </Button>
                   </div>
                 </DialogContent>
@@ -509,13 +572,13 @@ const RWAMultisigWallet = () => {
 
             <div className="grid gap-6">
               {transactions.map((transaction) => (
-                <Card key={transaction.id} className="hover:shadow-lg transition-shadow">
+                <Card key={transaction.id.toString()} className="hover:shadow-lg transition-shadow">
                   <CardHeader>
                     <div className="flex justify-between items-start">
                       <div className="flex items-center gap-2">
                         {getTypeIcon(transaction.type)}
                         <div>
-                          <CardTitle className="text-lg">交易 #{transaction.id}</CardTitle>
+                          <CardTitle className="text-lg">交易 #{transaction.id.toString()}</CardTitle>
                           <CardDescription>
                             {transaction.destination}
                           </CardDescription>
@@ -535,42 +598,42 @@ const RWAMultisigWallet = () => {
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
                       <div>
                         <Label className="text-sm font-medium">金额</Label>
-                        <p className="text-lg">{transaction.value} {transaction.type === 'ETHER_TRANSFER' ? 'ETH' : ''}</p>
+                        <p className="text-lg">{formatEther(transaction.value)} {transaction.type === 'ETHER_TRANSFER' ? 'ETH' : ''}</p>
                       </div>
                       <div>
                         <Label className="text-sm font-medium">创建时间</Label>
-                        <p className="text-sm">{formatDistanceToNow(new Date(transaction.createdAt), { addSuffix: true })}</p>
+                        <p className="text-sm">{formatDistanceToNow(new Date(Number(transaction.createdAt) * 1000), { addSuffix: true })}</p>
                       </div>
                       <div>
                         <Label className="text-sm font-medium">截止时间</Label>
-                        <p className="text-sm">{formatDistanceToNow(new Date(transaction.deadline), { addSuffix: true })}</p>
+                        <p className="text-sm">{formatDistanceToNow(new Date(Number(transaction.deadline) * 1000), { addSuffix: true })}</p>
                       </div>
                       <div>
                         <Label className="text-sm font-medium">签名进度</Label>
-                        <p className="text-sm">{transaction.signatures.length} / {signatureThreshold}</p>
+                        <p className="text-sm">{transaction.signatures.length} / {signatureThreshold.toString()}</p>
                       </div>
                     </div>
 
                     <div className="mb-4">
-                      <Progress value={(transaction.signatures.length / signatureThreshold) * 100} className="h-2" />
+                      <Progress value={(transaction.signatures.length / Number(signatureThreshold)) * 100} className="h-2" />
                     </div>
 
                     <div className="flex flex-wrap gap-2 mb-4">
                       {transaction.signatures.map((sig, index) => (
                         <Badge key={index} variant="outline">
-                          {sig.signer}
+                          {sig.signer.slice(0, 6)}...{sig.signer.slice(-4)}
                         </Badge>
                       ))}
                     </div>
 
                     <div className="flex gap-2">
                       {canSign(transaction) && (
-                        <Button onClick={() => handleSignTransaction(transaction.id)}>
+                        <Button onClick={() => handleSignTransaction(transaction.id)} disabled={isPending}>
                           签名
                         </Button>
                       )}
                       {canExecute(transaction) && (
-                        <Button onClick={() => handleExecuteTransaction(transaction.id)} className="bg-green-600 hover:bg-green-700">
+                        <Button onClick={() => handleExecuteTransaction(transaction.id)} className="bg-green-600 hover:bg-green-700" disabled={isPending}>
                           执行
                         </Button>
                       )}
@@ -628,10 +691,10 @@ const RWAMultisigWallet = () => {
                       <div>
                         <h3 className="text-lg font-semibold">{signer.address}</h3>
                         <p className="text-sm text-gray-600">
-                          加入于 {formatDistanceToNow(new Date(signer.joinedAt), { addSuffix: true })}
+                          加入于 {formatDistanceToNow(new Date(Number(signer.joinedAt) * 1000), { addSuffix: true })}
                         </p>
                         <p className="text-sm text-gray-600">
-                          交易数量: {signer.transactionCount}
+                          交易数量: {signer.transactionCount.toString()}
                         </p>
                       </div>
                       <div>
@@ -659,14 +722,14 @@ const RWAMultisigWallet = () => {
                 <div className="flex items-center gap-4">
                   <Input
                     type="number"
-                    value={signatureThreshold}
-                    onChange={(e) => setSignatureThreshold(parseInt(e.target.value))}
+                    value={signatureThreshold.toString()}
+                    onChange={(e) => setSignatureThreshold(BigInt(e.target.value))}
                     min="1"
                     max={signers.length}
                     className="w-20"
                   />
                   <span>/ {signers.length}</span>
-                  <Button>更新阈值</Button>
+                  <Button disabled>更新阈值</Button>
                 </div>
               </CardContent>
             </Card>

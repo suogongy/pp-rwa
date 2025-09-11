@@ -45,7 +45,7 @@ contract DeployPhase3 is Script {
         address[] memory initialSigners = new address[](3);
         initialSigners[0] = deployer;
         initialSigners[1] = address(0xa0Ee7A142d267C1f36714E4a8F75612F20a79720);
-        initialSigners[2] = address(0x0987654321098765432109876543210987654321);
+        initialSigners[2] = address(0x23618e81E3f5cdF7f54C3d65f7FBc0aBf5B21E8f);
         
         RWAMultisigWallet multisigWallet = new RWAMultisigWallet(
             initialSigners,
