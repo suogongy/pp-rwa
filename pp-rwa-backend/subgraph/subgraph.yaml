@@ -1,0 +1,239 @@
+specVersion: 0.0.5
+schema:
+  file: ./schema.graphql
+dataSources:
+  # RWA20 代币合约数据源
+  - kind: ethereum/contract
+    name: RWA20
+    network: sepolia
+    source:
+      address: "0xYourRWA20ContractAddress"
+      abi: RWA20
+      startBlock: 0
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.7
+      language: wasm/assemblyscript
+      entities:
+        - Token
+        - Transfer
+        - Mint
+        - Burn
+        - BatchTransfer
+        - WhitelistUpdate
+        - Account
+      abis:
+        - name: RWA20
+          file: ./abis/RWA20.json
+      eventHandlers:
+        - event: Transfer(indexed address,indexed address,uint256)
+          handler: handleTransfer
+        - event: Mint(address,uint256)
+          handler: handleMint
+        - event: Burn(address,uint256)
+          handler: handleBurn
+        - event: BatchTransfer(address,address[],uint256[],bytes32)
+          handler: handleBatchTransfer
+        - event: WhitelistUpdated(address,bool)
+          handler: handleWhitelistUpdate
+      file: ./src/rwa20-mapping.ts
+
+  # RWA1155 多代币合约数据源
+  - kind: ethereum/contract
+    name: RWA1155
+    network: sepolia
+    source:
+      address: "0xYourRWA1155ContractAddress"
+      abi: RWA1155
+      startBlock: 0
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.7
+      language: wasm/assemblyscript
+      entities:
+        - RWA1155
+        - RWA1155TokenType
+        - RWA1155Holder
+        - RWA1155Transfer
+        - RWA1155Mint
+        - RWA1155Burn
+        - RWA1155Royalty
+        - RWA1155VersionUpdate
+        - RWA1155Stats
+      abis:
+        - name: RWA1155
+          file: ./abis/RWA1155.json
+      eventHandlers:
+        - event: TransferSingle(indexed address,indexed address,indexed address,uint256,uint256)
+          handler: handleTransfer
+        - event: TransferBatch(indexed address,indexed address,address[],uint256[])
+          handler: handleTransferBatch
+        - event: Mint(address,uint256,uint256,bytes)
+          handler: handleMint
+        - event: Burn(address,uint256,uint256)
+          handler: handleBurn
+        - event: URI(string,uint256)
+          handler: handleURI
+        - event: Paused(address)
+          handler: handlePaused
+        - event: Unpaused(address)
+          handler: handleUnpaused
+      file: ./src/rwa1155-mapping.ts
+
+  # 治理合约数据源
+  - kind: ethereum/contract
+    name: RWAGovernor
+    network: sepolia
+    source:
+      address: "0xYourGovernorContractAddress"
+      abi: RWAGovernor
+      startBlock: 0
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.7
+      language: wasm/assemblyscript
+      entities:
+        - RWAGovernor
+        - GovernanceProposal
+        - GovernanceVote
+        - GovernanceStats
+      abis:
+        - name: RWAGovernor
+          file: ./abis/RWAGovernor.json
+      eventHandlers:
+        - event: ProposalCreated(uint256,address,address[],uint256[],bytes[],string,bytes32)
+          handler: handleProposalCreated
+        - event: ProposalCanceled(uint256)
+          handler: handleProposalCanceled
+        - event: ProposalExecuted(uint256)
+          handler: handleProposalExecuted
+        - event: VoteCast(address,uint256,uint8,uint256,string)
+          handler: handleVoteCast
+        - event: ProposalThresholdSet(uint256,uint256)
+          handler: handleProposalThresholdSet
+        - event: VotingDelaySet(uint256,uint256)
+          handler: handleVotingDelaySet
+        - event: VotingPeriodSet(uint256,uint256)
+          handler: handleVotingPeriodSet
+        - event: QuorumNumeratorUpdated(uint256,uint256)
+          handler: handleQuorumNumeratorUpdated
+      file: ./src/governance-mapping.ts
+
+  # 多签钱包数据源
+  - kind: ethereum/contract
+    name: RWAMultisigWallet
+    network: sepolia
+    source:
+      address: "0xYourMultisigWalletContractAddress"
+      abi: RWAMultisigWallet
+      startBlock: 0
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.7
+      language: wasm/assemblyscript
+      entities:
+        - RWAMultisigWallet
+        - MultisigSigner
+        - MultisigTransaction
+        - MultisigSignature
+        - MultisigStats
+      abis:
+        - name: RWAMultisigWallet
+          file: ./abis/RWAMultisigWallet.json
+      eventHandlers:
+        - event: TransactionCreated(uint256,uint8,address,uint256,bytes,uint256,address)
+          handler: handleTransactionCreated
+        - event: TransactionSigned(uint256,address,bytes)
+          handler: handleTransactionSigned
+        - event: TransactionExecuted(uint256,address,uint256)
+          handler: handleTransactionExecuted
+        - event: TransactionCancelled(uint256)
+          handler: handleTransactionCancelled
+        - event: SignerAdded(address)
+          handler: handleSignerAdded
+        - event: SignerRemoved(address)
+          handler: handleSignerRemoved
+        - event: SignatureThresholdUpdated(uint256,uint256)
+          handler: handleSignatureThresholdUpdated
+        - event: EmergencyPaused(address)
+          handler: handleEmergencyPaused
+        - event: EmergencyUnpaused(address)
+          handler: handleEmergencyUnpaused
+      file: ./src/multisig-mapping.ts
+
+  # 预言机数据源
+  - kind: ethereum/contract
+    name: RWAOracle
+    network: sepolia
+    source:
+      address: "0xYourOracleContractAddress"
+      abi: RWAOracle
+      startBlock: 0
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.7
+      language: wasm/assemblyscript
+      entities:
+        - RWAOracle
+        - PriceFeed
+        - PriceHistory
+        - RandomRequest
+        - AssetValuation
+      abis:
+        - name: RWAOracle
+          file: ./abis/RWAOracle.json
+      eventHandlers:
+        - event: PriceFeedAdded(string,address,uint8)
+          handler: handlePriceFeedAdded
+        - event: PriceFeedRemoved(string)
+          handler: handlePriceFeedRemoved
+        - event: PriceFeedUpdated(string,int256,uint256)
+          handler: handlePriceFeedUpdated
+        - event: AssetValuationRequested(uint256,string)
+          handler: handleAssetValuationRequested
+        - event: AssetValuationUpdated(uint256,uint256,uint256)
+          handler: handleAssetValuationUpdated
+        - event: RandomnessRequested(uint256,address)
+          handler: handleRandomnessRequested
+        - event: RandomnessFulfilled(uint256,uint256[])
+          handler: handleRandomnessFulfilled
+        - event: AutomationTaskCreated(uint256,string,address,bytes,uint256)
+          handler: handleAutomationTaskCreated
+        - event: AutomationTaskExecuted(uint256,uint256)
+          handler: handleAutomationTaskExecuted
+        - event: AutomationTaskToggled(uint256,bool)
+          handler: handleAutomationTaskToggled
+      file: ./src/oracle-mapping.ts
+
+  # 可升级代理数据源
+  - kind: ethereum/contract
+    name: RWAUpgradeableProxy
+    network: sepolia
+    source:
+      address: "0xYourProxyFactoryContractAddress"
+      abi: RWAUpgradeableProxy
+      startBlock: 0
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.7
+      language: wasm/assemblyscript
+      entities:
+        - RWAUpgradeableProxy
+        - ProxyUpgrade
+      abis:
+        - name: RWAUpgradeableProxy
+          file: ./abis/RWAUpgradeableProxy.json
+      eventHandlers:
+        - event: ProxyCreated(address,address,address,bytes)
+          handler: handleProxyCreated
+        - event: UpgradeScheduled(address,address,uint256)
+          handler: handleUpgradeScheduled
+        - event: UpgradeExecuted(address,address,address,string)
+          handler: handleUpgradeExecuted
+        - event: UpgradeCancelled(address,address)
+          handler: handleUpgradeCancelled
+        - event: EmergencyUpgrade(address,address,address)
+          handler: handleEmergencyUpgrade
+        - event: ContractVersionUpdated(address,uint256,uint256)
+          handler: handleContractVersionUpdated
+      file: ./src/proxy-mapping.ts

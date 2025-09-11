@@ -1,3 +1,7 @@
+# RWA项目子图Schema定义
+# 用于索引区块链数据，提供GraphQL API
+
+# RWA20代币合约实体 (保留原有结构)
 type Token @entity {
   id: ID!
   address: Bytes!
@@ -17,6 +21,7 @@ type Token @entity {
   updatedAt: BigInt!
 }
 
+# RWA20转账事件
 type Transfer @entity(immutable: true) {
   id: ID!
   token: Token!
@@ -28,6 +33,7 @@ type Transfer @entity(immutable: true) {
   timestamp: BigInt!
 }
 
+# RWA20铸造事件
 type Mint @entity(immutable: true) {
   id: ID!
   token: Token!
@@ -39,6 +45,7 @@ type Mint @entity(immutable: true) {
   timestamp: BigInt!
 }
 
+# RWA20销毁事件
 type Burn @entity(immutable: true) {
   id: ID!
   token: Token!
@@ -50,6 +57,7 @@ type Burn @entity(immutable: true) {
   timestamp: BigInt!
 }
 
+# RWA20批量转账事件
 type BatchTransfer @entity(immutable: true) {
   id: ID!
   token: Token!
@@ -63,6 +71,7 @@ type BatchTransfer @entity(immutable: true) {
   timestamp: BigInt!
 }
 
+# RWA20白名单更新事件
 type WhitelistUpdate @entity(immutable: true) {
   id: ID!
   token: Token!
@@ -73,6 +82,7 @@ type WhitelistUpdate @entity(immutable: true) {
   timestamp: BigInt!
 }
 
+# RWA20账户实体
 type Account @entity {
   id: ID!
   address: Bytes!
@@ -84,4 +94,673 @@ type Account @entity {
   whitelistUpdates: [WhitelistUpdate!]!
   createdAt: BigInt!
   updatedAt: BigInt!
+}
+
+# RWA1155多代币合约实体
+type RWA1155 @entity {
+  "合约地址"
+  id: ID!
+  "合约名称"
+  name: String!
+  "合约符号"
+  symbol: String!
+  "合约创建时间"
+  createdAt: BigInt!
+  "合约创建者"
+  creator: Bytes!
+  "基础URI"
+  baseURI: String!
+  "是否暂停"
+  paused: Boolean!
+  "代币类型"
+  tokenTypes: [RWA1155TokenType!]! @derivedFrom(field: "contract")
+  "转账事件"
+  transfers: [RWA1155Transfer!]! @derivedFrom(field: "contract")
+  "铸造事件"
+  mints: [RWA1155Mint!]! @derivedFrom(field: "contract")
+  "销毁事件"
+  burns: [RWA1155Burn!]! @derivedFrom(field: "contract")
+  "版本更新事件"
+  versionUpdates: [RWA1155VersionUpdate!]! @derivedFrom(field: "contract")
+  "统计信息"
+  stats: RWA1155Stats! @derivedFrom(field: "contract")
+}
+
+# RWA1155代币类型实体
+type RWA1155TokenType @entity {
+  "代币ID_合约地址"
+  id: ID!
+  "代币ID"
+  tokenId: BigInt!
+  "代币名称"
+  name: String!
+  "代币符号"
+  symbol: String!
+  "代币URI"
+  tokenURI: String!
+  "总供应量"
+  totalSupply: BigInt!
+  "是否可铸造"
+  mintable: Boolean!
+  "是否可销毁"
+  burnable: Boolean!
+  "是否可转移"
+  transferable: Boolean!
+  "创建时间"
+  createdAt: BigInt!
+  "最后更新时间"
+  updatedAt: BigInt!
+  "所属合约"
+  contract: RWA1155!
+  "持有者"
+  holders: [RWA1155Holder!]! @derivedFrom(field: "tokenType")
+  "版税信息"
+  royalty: RWA1155Royalty
+}
+
+# RWA1155持有者实体
+type RWA1155Holder @entity {
+  "持有者地址_代币ID"
+  id: ID!
+  "持有者地址"
+  address: Bytes!
+  "代币ID"
+  tokenId: BigInt!
+  "持有数量"
+  balance: BigInt!
+  "首次获得时间"
+  firstAcquiredAt: BigInt!
+  "最后更新时间"
+  updatedAt: BigInt!
+  "所属代币类型"
+  tokenType: RWA1155TokenType!
+  "转账记录"
+  transfers: [RWA1155Transfer!]! @derivedFrom(field: "holder")
+}
+
+# RWA1155转账事件
+type RWA1155Transfer @entity(immutable: true) {
+  "交易哈希_日志索引"
+  id: ID!
+  "交易哈希"
+  transactionHash: Bytes!
+  "区块号"
+  blockNumber: BigInt!
+  "区块时间戳"
+  timestamp: BigInt!
+  "发送者"
+  from: Bytes!
+  "接收者"
+  to: Bytes!
+  "代币ID"
+  tokenId: BigInt!
+  "数量"
+  value: BigInt!
+  "所属合约"
+  contract: RWA1155!
+  "持有者"
+  holder: RWA1155Holder
+}
+
+# RWA1155铸造事件
+type RWA1155Mint @entity(immutable: true) {
+  "交易哈希_日志索引"
+  id: ID!
+  "交易哈希"
+  transactionHash: Bytes!
+  "区块号"
+  blockNumber: BigInt!
+  "区块时间戳"
+  timestamp: BigInt!
+  "接收者"
+  to: Bytes!
+  "代币ID"
+  tokenId: BigInt!
+  "数量"
+  value: BigInt!
+  "铸造者"
+  minter: Bytes!
+  "所属合约"
+  contract: RWA1155!
+}
+
+# RWA1155销毁事件
+type RWA1155Burn @entity(immutable: true) {
+  "交易哈希_日志索引"
+  id: ID!
+  "交易哈希"
+  transactionHash: Bytes!
+  "区块号"
+  blockNumber: BigInt!
+  "区块时间戳"
+  timestamp: BigInt!
+  "销毁者"
+  from: Bytes!
+  "代币ID"
+  tokenId: BigInt!
+  "数量"
+  value: BigInt!
+  "所属合约"
+  contract: RWA1155!
+}
+
+# RWA1155版税信息
+type RWA1155Royalty @entity {
+  "代币ID_合约地址"
+  id: ID!
+  "代币ID"
+  tokenId: BigInt!
+  "接收者地址"
+  receiver: Bytes!
+  "费率 (基础10000)"
+  feeNumerator: BigInt!
+  "设置时间"
+  timestamp: BigInt!
+}
+
+# RWA1155版本更新
+type RWA1155VersionUpdate @entity(immutable: true) {
+  "交易哈希_日志索引"
+  id: ID!
+  "交易哈希"
+  transactionHash: Bytes!
+  "区块号"
+  blockNumber: BigInt!
+  "区块时间戳"
+  timestamp: BigInt!
+  "新URI"
+  newURI: String!
+  "更新者"
+  updater: Bytes!
+  "所属合约"
+  contract: RWA1155!
+}
+
+# RWA1155统计信息
+type RWA1155Stats @entity {
+  "合约地址"
+  id: ID!
+  "总转账数量"
+  totalTransfers: BigInt!
+  "总铸造数量"
+  totalMints: BigInt!
+  "总销毁数量"
+  totalBurns: BigInt!
+  "唯一持有者数量"
+  uniqueHolders: BigInt!
+  "总交易量"
+  totalVolume: BigInt!
+  "最后更新时间"
+  lastUpdated: BigInt!
+  "所属合约"
+  contract: RWA1155!
+}
+
+# 治理合约实体
+type RWAGovernor @entity {
+  "合约地址"
+  id: ID!
+  "合约名称"
+  name: String!
+  "投票代币地址"
+  token: Bytes!
+  "时间锁地址"
+  timelock: Bytes!
+  "投票延迟 (区块)"
+  votingDelay: BigInt!
+  "投票周期 (区块)"
+  votingPeriod: BigInt!
+  "提案阈值"
+  proposalThreshold: BigInt!
+  "法定人数"
+  quorumNumerator: BigInt!
+  "创建时间"
+  createdAt: BigInt!
+  "提案"
+  proposals: [GovernanceProposal!]! @derivedFrom(field: "governor")
+  "投票记录"
+  votes: [GovernanceVote!]! @derivedFrom(field: "governor")
+  "统计信息"
+  stats: GovernanceStats! @derivedFrom(field: "governor")
+}
+
+# 治理提案实体
+type GovernanceProposal @entity {
+  "提案ID"
+  id: ID!
+  "提案ID (数字)"
+  proposalId: BigInt!
+  "提案者"
+  proposer: Bytes!
+  "提案类型"
+  proposalType: GovernanceProposalType!
+  "提案描述"
+  description: String!
+  "IPFS哈希"
+  ipfsHash: String!
+  "目标地址数组"
+  targets: [Bytes!]!
+  "转账金额数组"
+  values: [BigInt!]!
+  "调用数据数组"
+  calldatas: [String!]!
+  "开始区块"
+  startBlock: BigInt!
+  "结束区块"
+  endBlock: BigInt!
+  "创建时间"
+  createdAt: BigInt!
+  "截止时间"
+  deadline: BigInt!
+  "提案状态"
+  status: GovernanceProposalStatus!
+  "赞成票数"
+  forVotes: BigInt!
+  "反对票数"
+  againstVotes: BigInt!
+  "弃权票数"
+  abstainVotes: BigInt!
+  "是否已执行"
+  executed: Boolean!
+  "执行时间"
+  executedAt: BigInt
+  "执行者"
+  executor: Bytes
+  "所属治理合约"
+  governor: RWAGovernor!
+  "投票记录"
+  votes: [GovernanceVote!]! @derivedFrom(field: "proposal")
+}
+
+# 治理投票记录
+type GovernanceVote @entity(immutable: true) {
+  "投票ID"
+  id: ID!
+  "投票者"
+  voter: Bytes!
+  "提案ID"
+  proposalId: BigInt!
+  "投票支持类型"
+  support: GovernanceVoteSupport!
+  "投票权重"
+  votes: BigInt!
+  "投票理由"
+  reason: String
+  "交易哈希"
+  transactionHash: Bytes!
+  "区块号"
+  blockNumber: BigInt!
+  "区块时间戳"
+  timestamp: BigInt!
+  "所属治理合约"
+  governor: RWAGovernor!
+  "所属提案"
+  proposal: GovernanceProposal!
+}
+
+# 治理统计信息
+type GovernanceStats @entity {
+  "治理合约地址"
+  id: ID!
+  "总提案数"
+  totalProposals: BigInt!
+  "活跃提案数"
+  activeProposals: BigInt!
+  "已通过提案数"
+  passedProposals: BigInt!
+  "已拒绝提案数"
+  rejectedProposals: BigInt!
+  "已执行提案数"
+  executedProposals: BigInt!
+  "总投票数"
+  totalVotes: BigInt!
+  "唯一投票者数量"
+  uniqueVoters: BigInt!
+  "平均投票参与率"
+  averageParticipation: BigDecimal!
+  "最后更新时间"
+  lastUpdated: BigInt!
+  "所属治理合约"
+  governor: RWAGovernor!
+}
+
+# 多签钱包实体
+type RWAMultisigWallet @entity {
+  "钱包地址"
+  id: ID!
+  "钱包名称"
+  name: String!
+  "签名阈值"
+  signatureThreshold: BigInt!
+  "创建时间"
+  createdAt: BigInt!
+  "是否暂停"
+  paused: Boolean!
+  "签名者"
+  signers: [MultisigSigner!]! @derivedFrom(field: "wallet")
+  "交易记录"
+  transactions: [MultisigTransaction!]! @derivedFrom(field: "wallet")
+  "统计信息"
+  stats: MultisigStats! @derivedFrom(field: "wallet")
+}
+
+# 多签签名者
+type MultisigSigner @entity {
+  "签名者地址_钱包地址"
+  id: ID!
+  "签名者地址"
+  address: Bytes!
+  "是否活跃"
+  active: Boolean!
+  "加入时间"
+  joinedAt: BigInt!
+  "交易数量"
+  transactionCount: BigInt!
+  "所属钱包"
+  wallet: RWAMultisigWallet!
+  "签名记录"
+  signatures: [MultisigSignature!]! @derivedFrom(field: "signer")
+}
+
+# 多签交易
+type MultisigTransaction @entity {
+  "交易ID"
+  id: ID!
+  "交易ID (数字)"
+  transactionId: BigInt!
+  "交易类型"
+  transactionType: MultisigTransactionType!
+  "目标地址"
+  destination: Bytes!
+  "转账金额"
+  value: BigInt!
+  "调用数据"
+  data: String!
+  "创建者"
+  creator: Bytes!
+  "创建时间"
+  createdAt: BigInt!
+  "截止时间"
+  deadline: BigInt!
+  "交易状态"
+  status: MultisigTransactionStatus!
+  "签名数量"
+  signatureCount: BigInt!
+  "执行时间"
+  executedAt: BigInt
+  "执行者"
+  executor: Bytes!
+  "Gas使用量"
+  gasUsed: BigInt
+  "所属钱包"
+  wallet: RWAMultisigWallet!
+  "签名记录"
+  signatures: [MultisigSignature!]! @derivedFrom(field: "transaction")
+}
+
+# 多签签名记录
+type MultisigSignature @entity(immutable: true) {
+  "签名ID"
+  id: ID!
+  "签名者"
+  signer: MultisigSigner!
+  "交易"
+  transaction: MultisigTransaction!
+  "签名时间"
+  timestamp: BigInt!
+  "签名数据"
+  signature: String!
+}
+
+# 多签统计信息
+type MultisigStats @entity {
+  "钱包地址"
+  id: ID!
+  "总交易数"
+  totalTransactions: BigInt!
+  "已执行交易数"
+  executedTransactions: BigInt!
+  "待处理交易数"
+  pendingTransactions: BigInt!
+  "总转账金额"
+  totalValue: BigInt!
+  "总签名数"
+  totalSignatures: BigInt!
+  "平均签名时间"
+  averageSigningTime: BigInt!
+  "最后更新时间"
+  lastUpdated: BigInt!
+  "所属钱包"
+  wallet: RWAMultisigWallet!
+}
+
+# 预言机实体
+type RWAOracle @entity {
+  "预言机地址"
+  id: ID!
+  "预言机类型"
+  oracleType: OracleType!
+  "创建时间"
+  createdAt: BigInt!
+  "最后更新时间"
+  lastUpdated: BigInt!
+  "价格喂送"
+  priceFeeds: [PriceFeed!]! @derivedFrom(field: "oracle")
+  "随机数请求"
+  randomRequests: [RandomRequest!]! @derivedFrom(field: "oracle")
+  "资产估值"
+  assetValuations: [AssetValuation!]! @derivedFrom(field: "oracle")
+}
+
+# 价格喂送
+type PriceFeed @entity {
+  "价格喂送地址"
+  id: ID!
+  "代币符号"
+  symbol: String!
+  "代币地址"
+  tokenAddress: Bytes!
+  "当前价格"
+  currentPrice: BigInt!
+  "价格变化24h"
+  priceChange24h: BigDecimal!
+  "价格更新时间"
+  lastUpdate: BigInt!
+  "所属预言机"
+  oracle: RWAOracle!
+  "价格历史"
+  priceHistory: [PriceHistory!]! @derivedFrom(field: "priceFeed")
+}
+
+# 价格历史
+type PriceHistory @entity(immutable: true) {
+  "交易哈希_日志索引"
+  id: ID!
+  "价格"
+  price: BigInt!
+  "区块号"
+  blockNumber: BigInt!
+  "区块时间戳"
+  timestamp: BigInt!
+  "回合ID"
+  roundId: BigInt!
+  "所属价格喂送"
+  priceFeed: PriceFeed!
+}
+
+# 随机数请求
+type RandomRequest @entity {
+  "请求ID"
+  id: ID!
+  "请求者"
+  requester: Bytes!
+  "请求时间"
+  requestedAt: BigInt!
+  "完成时间"
+  fulfilledAt: BigInt
+  "是否已完成"
+  fulfilled: Boolean!
+  "随机数结果"
+  randomWords: [BigInt!]!
+  "所属预言机"
+  oracle: RWAOracle!
+}
+
+# 资产估值
+type AssetValuation @entity {
+  "资产ID_预言机地址"
+  id: ID!
+  "资产ID"
+  assetId: BigInt!
+  "资产类型"
+  assetType: String!
+  "估值"
+  value: BigInt!
+  "置信度"
+  confidence: BigInt!
+  "估值时间"
+  valuationTime: BigInt!
+  "所属预言机"
+  oracle: RWAOracle!
+}
+
+# 可升级代理实体
+type RWAUpgradeableProxy @entity {
+  "代理地址"
+  id: ID!
+  "实现地址"
+  implementation: Bytes!
+  "管理员地址"
+  admin: Bytes!
+  "代理类型"
+  proxyType: ProxyType!
+  "版本"
+  version: BigInt!
+  "创建时间"
+  createdAt: BigInt!
+  "升级记录"
+  upgrades: [ProxyUpgrade!]! @derivedFrom(field: "proxy")
+}
+
+# 代理升级记录
+type ProxyUpgrade @entity(immutable: true) {
+  "交易哈希_日志索引"
+  id: ID!
+  "交易哈希"
+  transactionHash: Bytes!
+  "区块号"
+  blockNumber: BigInt!
+  "区块时间戳"
+  timestamp: BigInt!
+  "旧实现地址"
+  oldImplementation: Bytes!
+  "新实现地址"
+  newImplementation: Bytes!
+  "升级者"
+  upgrader: Bytes!
+  "升级原因"
+  reason: String!
+  "所属代理"
+  proxy: RWAUpgradeableProxy!
+}
+
+# 用户实体 (扩展原有Account实体)
+type User @entity {
+  "用户地址"
+  id: ID!
+  "地址"
+  address: Bytes!
+  "首次交易时间"
+  firstTransactionAt: BigInt
+  "最后交易时间"
+  lastTransactionAt: BigInt!
+  "交易总数"
+  totalTransactions: BigInt!
+  "RWA20相关"
+  account: Account
+  "RWA1155持有"
+  rwa1155Holdings: [RWA1155Holder!]! @derivedFrom(field: "address")
+  "治理投票"
+  governanceVotes: [GovernanceVote!]! @derivedFrom(field: "voter")
+  "多签交易"
+  multisigTransactions: [MultisigTransaction!]! @derivedFrom(field: "creator")
+  "多签签名"
+  multisigSignatures: [MultisigSignature!]! @derivedFrom(field: "signer")
+  "预言机请求"
+  oracleRequests: [RandomRequest!]! @derivedFrom(field: "requester")
+}
+
+# 全局统计实体
+type GlobalStats @entity {
+  "ID (固定为 'global')"
+  id: ID!
+  "总用户数"
+  totalUsers: BigInt!
+  "活跃用户数 (24h)"
+  activeUsers24h: BigInt!
+  "总交易数"
+  totalTransactions: BigInt!
+  "总交易量"
+  totalVolume: BigInt!
+  "总合约数"
+  totalContracts: BigInt!
+  "总提案数"
+  totalProposals: BigInt!
+  "总投票数"
+  totalVotes: BigInt!
+  "最后更新时间"
+  lastUpdated: BigInt!
+}
+
+# 枚举类型
+enum GovernanceProposalType {
+  GENERAL
+  PARAMETER_CHANGE
+  EMERGENCY
+  UPGRADE
+}
+
+enum GovernanceProposalStatus {
+  PENDING
+  ACTIVE
+  CANCELED
+  DEFEATED
+  SUCCEEDED
+  QUEUED
+  EXPIRED
+  EXECUTED
+}
+
+enum GovernanceVoteSupport {
+  AGAINST
+  FOR
+  ABSTAIN
+}
+
+enum MultisigTransactionType {
+  ETHER_TRANSFER
+  ERC20_TRANSFER
+  ERC721_TRANSFER
+  ERC1155_TRANSFER
+  CONTRACT_CALL
+  BATCH_TRANSFER
+}
+
+enum MultisigTransactionStatus {
+  PENDING
+  EXECUTED
+  CANCELLED
+}
+
+enum OracleType {
+  PRICE_FEED
+  RANDOM_NUMBER
+  ASSET_VALUATION
+  AUTOMATION
+}
+
+enum ProxyType {
+  TRANSPARENT
+  UUPS
+  BEACON
 }
