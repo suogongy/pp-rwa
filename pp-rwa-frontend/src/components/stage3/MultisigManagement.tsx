@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { useAccount, useReadContract, useWriteContract, useWaitForTransactionReceipt, useWatchContractEvent } from 'wagmi'
+import { useAccount, useReadContract, useWriteContract, useWaitForTransactionReceipt, useWatchContractEvent, useSignTypedData } from 'wagmi'
 import { RWAMultisigWallet_ADDRESS, RWAMultisigWallet_ABI } from '@/lib/wagmi'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -24,6 +24,23 @@ interface Transaction {
   requiredSignatures: bigint
 }
 
+// EIP-712 类型定义
+interface EIP712Domain {
+  name: string
+  version: string
+  chainId: number
+  verifyingContract: string
+}
+
+interface TransactionType {
+  transactionType: number
+  destination: string
+  value: string
+  data: string
+  nonce: string
+  deadline: string
+}
+
 export function MultisigManagement({ address }: { address: string }) {
   const [newTransactionDestination, setNewTransactionDestination] = useState('')
   const [newTransactionValue, setNewTransactionValue] = useState('')
@@ -31,6 +48,7 @@ export function MultisigManagement({ address }: { address: string }) {
   const [debugInfo, setDebugInfo] = useState<string>('')
   const [transactions, setTransactions] = useState<Transaction[]>([])
   const [transactionCounter, setTransactionCounter] = useState<bigint>(0n)
+  const [chainId, setChainId] = useState<number>(31337)
   const isLoadingRef = useRef(false)
   const lastLoadTime = useRef(0)
   const transactionsRef = useRef(transactions)
@@ -44,6 +62,7 @@ export function MultisigManagement({ address }: { address: string }) {
   
   const { writeContract, isPending, data: hash } = useWriteContract()
   const { isLoading: isConfirming, isSuccess: isConfirmed } = useWaitForTransactionReceipt({ hash })
+  const { signTypedDataAsync } = useSignTypedData()
 
   // 读取所有者列表
   const { data: owners, error: ownersError, isLoading: ownersLoading } = useReadContract({
@@ -67,25 +86,28 @@ export function MultisigManagement({ address }: { address: string }) {
     }
   })
   
-  const requiredConfirmationsValue = requiredConfirmations || 1n
+  const requiredConfirmationsValue = requiredConfirmations || 2n
 
   // 交易计数器通过 loadTransactions 函数动态获取
 
   // 添加调试信息和网络切换提示
   useEffect(() => {
-    const chainId = window.ethereum?.chainId || '未知'
-    const networkName = chainId === '0x7a69' ? 'Local (31337)' : chainId === '0xaa36a7' ? 'Sepolia (11155111)' : `${chainId} (未知网络)`
+    const hexChainId = window.ethereum?.chainId || '0x7a69'
+    const numericChainId = parseInt(hexChainId, 16)
+    setChainId(numericChainId)
+    
+    const networkName = hexChainId === '0x7a69' ? 'Local (31337)' : hexChainId === '0xaa36a7' ? 'Sepolia (11155111)' : `${hexChainId} (未知网络)`
     const expectedChainId = '0x7a69' // 31337 in hex
     
-    let debugMsg = `合约地址: ${RWAMultisigWallet_ADDRESS || '未配置'}\n当前用户: ${address || '未连接'}\n当前网络: ${networkName}\n期望网络: Local (31337)\n签名者加载中: ${ownersLoading}\n签名者错误: ${ownersError?.message || '无'}\n阈值错误: ${thresholdError?.message || '无'}`
+    let debugMsg = `合约地址: ${RWAMultisigWallet_ADDRESS || '未配置'}\n当前用户: ${address || '未连接'}\n当前网络: ${networkName}\n期望网络: Local (31337)\n签名者数量: ${ownersList.length}\n签名阈值: ${requiredConfirmationsValue.toString()}\n签名者加载中: ${ownersLoading}\n签名者错误: ${ownersError?.message || '无'}\n阈值错误: ${thresholdError?.message || '无'}`
     
-    if (chainId !== expectedChainId && chainId !== '未知') {
+    if (hexChainId !== expectedChainId && hexChainId !== '未知') {
       debugMsg += '\n\n⚠️ 警告: 当前网络不正确！'
       debugMsg += '\n请切换到 Localhost:8545 网络 (Chain ID: 31337)'
     }
     
     setDebugInfo(debugMsg)
-  }, [address, ownersLoading, ownersError, thresholdError])
+  }, [address, chainId, ownersLoading, ownersError, thresholdError])
 
   // 监听交易创建事件
   useWatchContractEvent({
@@ -316,8 +338,8 @@ export function MultisigManagement({ address }: { address: string }) {
         data: txData.data.data,
         timestamp: BigInt(txData.data.timestamp),
         expiration: BigInt(txData.data.deadline),
-        executed: txData.data.status === 2n, // TransactionStatus.EXECUTED = 2
-        cancelled: txData.data.status === 3n, // TransactionStatus.CANCELLED = 3
+        executed: BigInt(txData.data.status) === 1n, // TransactionStatus.EXECUTED = 1
+        cancelled: BigInt(txData.data.status) === 2n, // TransactionStatus.CANCELLED = 2
         signatures: BigInt(signatureCount),
         requiredSignatures: requiredConfirmationsValue,
       }
@@ -479,6 +501,66 @@ export function MultisigManagement({ address }: { address: string }) {
     }
   }
 
+  // 生成交易签名
+  const generateTransactionSignature = useCallback(async (transactionId: bigint): Promise<string> => {
+    try {
+      console.log('开始生成交易签名...')
+      
+      // 获取交易详情
+      const transactionDetails = await getTransactionDetails(transactionId)
+      if (!transactionDetails) {
+        throw new Error('交易不存在')
+      }
+
+      // 构建EIP-712域名
+      const domain: EIP712Domain = {
+        name: 'RWAMultisigWallet',
+        version: '1',
+        chainId: chainId,
+        verifyingContract: RWAMultisigWallet_ADDRESS,
+      }
+
+      // 构建交易类型
+      const types = {
+        Transaction: [
+          { name: 'transactionType', type: 'uint256' },
+          { name: 'destination', type: 'address' },
+          { name: 'value', type: 'uint256' },
+          { name: 'data', type: 'bytes' },
+          { name: 'nonce', type: 'uint256' },
+          { name: 'deadline', type: 'uint256' },
+        ]
+      }
+
+      // 构建交易值
+      const value: TransactionType = {
+        transactionType: Number(transactionDetails.transactionType),
+        destination: transactionDetails.destination,
+        value: transactionDetails.value.toString(),
+        data: transactionDetails.data,
+        nonce: transactionId.toString(), // 使用交易ID作为nonce
+        deadline: transactionDetails.expiration.toString(),
+      }
+
+      console.log('EIP-712 签名参数:', { domain, types, value })
+
+      // 生成签名
+      const signature = await signTypedDataAsync({
+        domain,
+        types,
+        primaryType: 'Transaction',
+        message: value,
+      })
+
+      console.log('生成的签名:', signature)
+      return signature
+
+    } catch (error) {
+      console.error('生成签名失败:', error)
+      throw error
+    }
+  }, [chainId, RWAMultisigWallet_ADDRESS, signTypedDataAsync])
+
   // 确认交易
   const handleConfirmTransaction = async (transactionId: bigint) => {
     console.log('✍️ 开始确认多重签名交易:')
@@ -487,8 +569,13 @@ export function MultisigManagement({ address }: { address: string }) {
     console.log('  合约地址:', RWAMultisigWallet_ADDRESS)
 
     try {
-      const txArgs = [transactionId, '0x'] // 签名需要根据实际情况调整
-      console.log('📝 签名参数:', txArgs)
+      console.log('正在生成EIP-712签名...')
+      
+      // 生成有效的签名
+      const signature = await generateTransactionSignature(transactionId)
+      const txArgs = [transactionId, signature]
+      
+      console.log('签名参数:', txArgs)
       
       writeContract({
         address: RWAMultisigWallet_ADDRESS,
@@ -497,27 +584,19 @@ export function MultisigManagement({ address }: { address: string }) {
         args: txArgs,
       })
       
-      console.log('✅ 签名交易已发送到区块链，等待确认...')
-      
-      // 更新本地状态（临时解决方案）
-      const updatedTransactions = transactions.map(tx => 
-        tx.id === transactionId 
-          ? { ...tx, signatures: tx.signatures + 1n }
-          : tx
-      )
-      setTransactions(updatedTransactions)
-      console.log('📋 本地状态已更新 - 交易签名数:', 
-        updatedTransactions.find(tx => tx.id === transactionId)?.signatures.toString()
-      )
+      console.log('签名交易已发送到区块链，等待确认...')
       
     } catch (error) {
-      console.error('❌ 确认交易失败:', error)
+      console.error('确认交易失败:', error)
       console.error('错误详情:', {
         message: error instanceof Error ? error.message : '未知错误',
         stack: error instanceof Error ? error.stack : '无堆栈信息',
         code: (error as Error & { code?: string })?.code,
         data: (error as Error & { data?: unknown })?.data
       })
+      
+      // 显示更友好的错误信息
+      alert(`签名失败: ${error instanceof Error ? error.message : '未知错误'}`)
     }
   }
 
@@ -794,9 +873,16 @@ export function MultisigManagement({ address }: { address: string }) {
                         {tx.executed && <Badge className="bg-green-500">已执行</Badge>}
                         {tx.cancelled && <Badge variant="destructive">已取消</Badge>}
                         {!tx.executed && !tx.cancelled && (
-                          <Badge variant="outline">
-                            {tx.signatures.toString()}/{tx.requiredSignatures.toString()} 签名
-                          </Badge>
+                          <>
+                            <Badge variant="outline">
+                              {tx.signatures.toString()}/{requiredConfirmationsValue.toString()} 签名
+                            </Badge>
+                            {tx.signatures >= requiredConfirmationsValue ? (
+                              <Badge className="bg-blue-500">可执行</Badge>
+                            ) : (
+                              <Badge variant="secondary">待签名</Badge>
+                            )}
+                          </>
                         )}
                       </div>
                     </div>
@@ -827,7 +913,7 @@ export function MultisigManagement({ address }: { address: string }) {
                         >
                           签名
                         </Button>
-                        {tx.signatures >= tx.requiredSignatures && (
+                        {!tx.executed && !tx.cancelled && tx.signatures >= requiredConfirmationsValue && (
                           <Button
                             size="sm"
                             onClick={() => handleExecuteTransaction(tx.id)}
