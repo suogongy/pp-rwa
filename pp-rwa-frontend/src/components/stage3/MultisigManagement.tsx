@@ -33,7 +33,15 @@ export function MultisigManagement({ address }: { address: string }) {
   const [transactionCounter, setTransactionCounter] = useState<bigint>(0n)
   const isLoadingRef = useRef(false)
   const lastLoadTime = useRef(0)
-
+  const transactionsRef = useRef(transactions)
+  const eventLoadTimeout = useRef<NodeJS.Timeout | null>(null)
+  
+  // 更新transactions ref
+  useEffect(() => {
+    transactionsRef.current = transactions
+  }, [transactions])
+  
+  
   const { writeContract, isPending, data: hash } = useWriteContract()
   const { isLoading: isConfirming, isSuccess: isConfirmed } = useWaitForTransactionReceipt({ hash })
 
@@ -85,7 +93,7 @@ export function MultisigManagement({ address }: { address: string }) {
     abi: RWAMultisigWallet_ABI,
     eventName: 'TransactionCreated',
     onLogs(logs) {
-      console.log('🎉 监听到交易创建事件 TransactionCreated:')
+      console.log('监听到交易创建事件 TransactionCreated:')
       console.log('  事件详情:', logs)
       console.log('  事件数量:', logs.length)
       logs.forEach((log, index) => {
@@ -96,7 +104,7 @@ export function MultisigManagement({ address }: { address: string }) {
           transactionType: log.args.transactionType?.toString(),
         })
       })
-      loadTransactions(true) // 强制重新加载
+      debouncedLoadFromEvent() // 防抖加载
     },
   })
 
@@ -106,7 +114,7 @@ export function MultisigManagement({ address }: { address: string }) {
     abi: RWAMultisigWallet_ABI,
     eventName: 'TransactionSigned',
     onLogs(logs) {
-      console.log('✍️ 监听到交易签名事件 TransactionSigned:')
+      console.log('监听到交易签名事件 TransactionSigned:')
       console.log('  事件详情:', logs)
       console.log('  事件数量:', logs.length)
       logs.forEach((log, index) => {
@@ -115,7 +123,7 @@ export function MultisigManagement({ address }: { address: string }) {
           signer: log.args.signer,
         })
       })
-      loadTransactions(true) // 强制重新加载
+      debouncedLoadFromEvent() // 防抖加载
     },
   })
 
@@ -125,7 +133,7 @@ export function MultisigManagement({ address }: { address: string }) {
     abi: RWAMultisigWallet_ABI,
     eventName: 'TransactionExecuted',
     onLogs(logs) {
-      console.log('🚀 监听到交易执行事件 TransactionExecuted:')
+      console.log('监听到交易执行事件 TransactionExecuted:')
       console.log('  事件详情:', logs)
       console.log('  事件数量:', logs.length)
       logs.forEach((log, index) => {
@@ -135,7 +143,7 @@ export function MultisigManagement({ address }: { address: string }) {
           value: log.args.value?.toString(),
         })
       })
-      loadTransactions(true) // 强制重新加载
+      debouncedLoadFromEvent() // 防抖加载
     },
   })
 
@@ -145,7 +153,7 @@ export function MultisigManagement({ address }: { address: string }) {
     abi: RWAMultisigWallet_ABI,
     eventName: 'TransactionCancelled',
     onLogs(logs) {
-      console.log('🚫 监听到交易取消事件 TransactionCancelled:')
+      console.log('监听到交易取消事件 TransactionCancelled:')
       console.log('  事件详情:', logs)
       console.log('  事件数量:', logs.length)
       logs.forEach((log, index) => {
@@ -153,7 +161,7 @@ export function MultisigManagement({ address }: { address: string }) {
           transactionId: log.args.transactionId?.toString(),
         })
       })
-      loadTransactions(true) // 强制重新加载
+      debouncedLoadFromEvent() // 防抖加载
     },
   })
 
@@ -162,14 +170,14 @@ export function MultisigManagement({ address }: { address: string }) {
     // 防抖：避免频繁调用
     const now = Date.now()
     if (!force && isLoadingRef.current || (now - lastLoadTime.current < 3000)) {
-      console.log('⏳ 跳过交易加载，防抖中...')
+      console.log('跳过交易加载，防抖中...')
       return
     }
     
     try {
       isLoadingRef.current = true
       lastLoadTime.current = now
-      console.log('🔄 开始加载交易列表...')
+      console.log('开始加载交易列表...')
       
       // 由于合约没有公开交易计数器，我们使用本地状态中的交易ID
       // 在实际应用中，你可能需要添加一个公开的交易计数器函数
@@ -178,34 +186,34 @@ export function MultisigManagement({ address }: { address: string }) {
       let startId: bigint
       let maxTransactionId: bigint
       
-      if (force || transactions.length === 0) {
+      if (force || transactionsRef.current.length === 0) {
         // 强制加载或初始加载：从1开始检查，但限制范围
         startId = 1n
         maxTransactionId = 20n // 初始检查前20个交易
-        console.log('🔍 强制/初始加载模式')
+        console.log('强制/初始加载模式')
       } else {
         // 增量加载：从当前最大交易ID开始
-        startId = BigInt(Math.max(...transactions.map(tx => Number(tx.id)))) + 1n
+        startId = BigInt(Math.max(...transactionsRef.current.map(tx => Number(tx.id)))) + 1n
         maxTransactionId = startId + 5n // 每次最多检查5个新交易
-        console.log('🔍 增量加载模式')
+        console.log('增量加载模式')
       }
       
-      console.log(`🔍 检查交易ID范围: ${startId.toString()} 到 ${maxTransactionId.toString()}`)
+      console.log(`检查交易ID范围: ${startId.toString()} 到 ${maxTransactionId.toString()}`)
       
       for (let i = startId; i <= maxTransactionId; i++) {
         try {
           const txData = await getTransactionDetails(i)
           if (txData && txData.timestamp > 0n) { // 只添加有实际时间戳的交易
             loadedTransactions.push(txData)
-            console.log(`✅ 加载交易 ${i.toString()}:`, txData)
+            console.log(`加载交易 ${i.toString()}:`, txData)
           } else {
             // 如果交易时间戳为0，说明是空交易，停止检查
-            console.log(`⏹️ 交易 ${i.toString()} 为空，停止检查`)
+            console.log(`交易 ${i.toString()} 为空，停止检查`)
             break
           }
         } catch (error) {
           // 如果交易不存在，继续检查下一个
-          console.log(`⏭️ 交易 ${i.toString()} 不存在，继续检查下一个`)
+          console.log(`交易 ${i.toString()} 不存在，继续检查下一个`)
           continue
         }
       }
@@ -216,18 +224,18 @@ export function MultisigManagement({ address }: { address: string }) {
           .sort((a, b) => b.timestamp > a.timestamp ? 1 : -1)
         
         setTransactions(sortedTransactions)
-        console.log(`✅ 强制加载完成，共 ${sortedTransactions.length} 笔交易`)
+        console.log(`强制加载完成，共 ${sortedTransactions.length} 笔交易`)
       } else if (loadedTransactions.length > 0) {
         // 增量加载：合并新旧交易
-        const allTransactions = [...transactions, ...loadedTransactions]
+        const allTransactions = [...transactionsRef.current, ...loadedTransactions]
           .sort((a, b) => b.timestamp > a.timestamp ? 1 : -1)
           // 去重
           .filter((tx, index, self) => self.findIndex(t => t.id === tx.id) === index)
         
         setTransactions(allTransactions)
-        console.log(`✅ 增量加载完成，共 ${allTransactions.length} 笔交易 (新增 ${loadedTransactions.length} 笔)`)
+        console.log(`增量加载完成，共 ${allTransactions.length} 笔交易 (新增 ${loadedTransactions.length} 笔)`)
       } else {
-        console.log('ℹ️ 没有发现新交易')
+        console.log('没有发现新交易')
       }
       
     } catch (error) {
@@ -235,7 +243,17 @@ export function MultisigManagement({ address }: { address: string }) {
     } finally {
       isLoadingRef.current = false
     }
-  }, [transactions, RWAMultisigWallet_ADDRESS, requiredConfirmationsValue])
+  }, [RWAMultisigWallet_ADDRESS, requiredConfirmationsValue])
+
+  // 防抖的事件加载函数
+  const debouncedLoadFromEvent = useCallback(() => {
+    if (eventLoadTimeout.current) {
+      clearTimeout(eventLoadTimeout.current)
+    }
+    eventLoadTimeout.current = setTimeout(() => {
+      loadTransactions(true)
+    }, 1000) // 1秒防抖
+  }, [loadTransactions])
 
   // 获取交易详情 - 简化版本
   const getTransactionDetails = async (transactionId: bigint): Promise<Transaction | null> => {
@@ -341,9 +359,9 @@ export function MultisigManagement({ address }: { address: string }) {
   useEffect(() => {
     if (RWAMultisigWallet_ADDRESS) {
       console.log('🚀 组件初始化，开始加载交易列表...')
-      loadTransactions(true) // 强制重新加载
+      debouncedLoadFromEvent() // 防抖加载
     }
-  }, [RWAMultisigWallet_ADDRESS, loadTransactions])
+  }, [RWAMultisigWallet_ADDRESS])
 
   // 自动切换网络功能
   const switchToCorrectNetwork = async () => {
