@@ -48,8 +48,8 @@ const RWAGovernor = () => {
   });
 
   // 合约配置
-  const governorAddress = '0x1234567890123456789012345678901234567890';
-  const tokenAddress = '0x0987654321098765432109876543210987654321';
+  const governorAddress = '0x9A676e781A523b5d0C0e43731313A708CB607508';
+  const tokenAddress = '0x0DCd1Bf9A1b36cE34237eEaFef220932846BCD82';
 
   // 读取治理参数
   const { data: quorumData } = useReadContract({
