@@ -7,12 +7,11 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { Badge } from '@/components/ui/badge'
 import { ipfsClient, NFTTemplates, getGatewayUrls, checkGatewayAvailability, type NFTMetadata, type UploadResult } from '@/lib/ipfs'
 import { ipfsHistory } from '@/lib/ipfs-history'
-import { IPFSDiagnostic } from './IPFSDiagnostic'
 import { ManualPin } from './ManualPin'
-import { IPFSAPITester } from './IPFSAPITester'
-import { IPFSHistoryViewer } from './IPFSHistoryViewer'
+import { ExternalLink, Copy, History, Settings } from 'lucide-react'
 
 interface IPFSUploadProps {
   onUploadComplete?: (metadataUrl: string) => void
@@ -210,15 +209,6 @@ export function IPFSUpload({ onUploadComplete }: IPFSUploadProps) {
 
   return (
     <div className="space-y-6">
-      {/* IPFS配置状态提示 */}
-      {!isIPFSConfigured && (
-        <Alert className="border-yellow-200 bg-yellow-50">
-          <AlertDescription className="text-yellow-700">
-            ⚠️ IPFS服务未配置：请在环境变量中设置 NEXT_PUBLIC_IPFS_API_URL
-          </AlertDescription>
-        </Alert>
-      )}
-
       {/* 网关状态提示 */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <Alert className={gatewayStatus.local ? "border-green-200 bg-green-50" : "border-red-200 bg-red-50"}>
@@ -233,19 +223,44 @@ export function IPFSUpload({ onUploadComplete }: IPFSUploadProps) {
         </Alert>
       </div>
       
+      {/* 快速链接 */}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center space-x-2">
+          <h2 className="text-2xl font-bold">IPFS NFT元数据上传</h2>
+          <Badge variant="outline" className="text-xs">去中心化存储</Badge>
+        </div>
+        <div className="flex items-center space-x-2">
+          <Button 
+            variant="outline" 
+            size="sm"
+            onClick={() => window.open('/ipfs', '_blank')}
+          >
+            <History className="w-4 h-4 mr-2" />
+            IPFS管理中心
+          </Button>
+          <Button 
+            variant="outline" 
+            size="sm"
+            onClick={() => window.open('http://localhost:5001/webui', '_blank')}
+          >
+            <Settings className="w-4 h-4 mr-2" />
+            IPFS WebUI
+          </Button>
+        </div>
+      </div>
+      
       <Card>
         <CardHeader>
-          <CardTitle>IPFS NFT元数据上传</CardTitle>
+          <CardTitle>上传NFT资源</CardTitle>
           <CardDescription>
             上传NFT图片和元数据到IPFS网络，生成去中心化的NFT资源
           </CardDescription>
         </CardHeader>
         <CardContent>
           <Tabs defaultValue="template" className="w-full">
-            <TabsList className="grid w-full grid-cols-3">
+            <TabsList className="grid w-full grid-cols-2">
               <TabsTrigger value="template">使用模板</TabsTrigger>
               <TabsTrigger value="custom">自定义</TabsTrigger>
-              <TabsTrigger value="history">历史记录</TabsTrigger>
             </TabsList>
             
             <TabsContent value="template" className="space-y-4">
@@ -398,12 +413,7 @@ export function IPFSUpload({ onUploadComplete }: IPFSUploadProps) {
                 <div className="text-sm text-gray-600 mb-2">
                   添加自定义属性来增强NFT的价值和独特性
                 </div>
-                {/* 这里可以添加动态属性添加功能 */}
               </div>
-            </TabsContent>
-
-            <TabsContent value="history" className="space-y-4">
-              <IPFSHistoryViewer />
             </TabsContent>
           </Tabs>
 
@@ -503,6 +513,7 @@ export function IPFSUpload({ onUploadComplete }: IPFSUploadProps) {
                               onClick={() => openInNewTab(gateway.url)}
                               className="text-xs hover:bg-blue-50 hover:text-blue-700 hover:border-blue-300"
                             >
+                              <ExternalLink className="w-3 h-3 mr-1" />
                               {gateway.name}
                             </Button>
                           ))}
@@ -541,6 +552,7 @@ export function IPFSUpload({ onUploadComplete }: IPFSUploadProps) {
                               onClick={() => openInNewTab(gateway.url)}
                               className="text-xs hover:bg-blue-50 hover:text-blue-700 hover:border-blue-300"
                             >
+                              <ExternalLink className="w-3 h-3 mr-1" />
                               {gateway.name}
                             </Button>
                           ))}
@@ -561,6 +573,7 @@ export function IPFSUpload({ onUploadComplete }: IPFSUploadProps) {
                     size="sm" 
                     onClick={() => copyToClipboard(uploadResult.metadataResult?.url || '')}
                   >
+                    <Copy className="w-3 h-3 mr-1" />
                     {copiedUrl === uploadResult.metadataResult?.url ? '已复制!' : '复制URL'}
                   </Button>
                   {uploadResult.metadataResult?.cid && (
@@ -569,6 +582,7 @@ export function IPFSUpload({ onUploadComplete }: IPFSUploadProps) {
                       variant="outline"
                       onClick={() => openInNewTab(getGatewayUrls(uploadResult.metadataResult.cid)[0].url)}
                     >
+                      <ExternalLink className="w-3 h-3 mr-1" />
                       查看元数据
                     </Button>
                   )}
@@ -579,76 +593,6 @@ export function IPFSUpload({ onUploadComplete }: IPFSUploadProps) {
               <ManualPin cid={uploadResult.metadataResult?.cid} />
             </div>
           )}
-        </CardContent>
-      </Card>
-
-      {/* 使用说明 */}
-      <Card>
-        <CardHeader>
-          <CardTitle>使用说明</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <h4 className="font-medium mb-2">环境变量配置</h4>
-              <div className="text-sm text-gray-600 space-y-1">
-                <div>• NEXT_PUBLIC_IPFS_API_URL: 本地IPFS节点URL (默认: 使用Next.js代理)</div>
-                <div>• NEXT_PUBLIC_IPFS_GATEWAY_URL: IPFS网关URL (默认: http://localhost:8080)</div>
-                <div>• 确保IPFS节点正在运行 (ipfs daemon)</div>
-              </div>
-            </div>
-            <div>
-              <h4 className="font-medium mb-2">IPFS数据访问</h4>
-              <div className="text-sm text-gray-600 space-y-1">
-                <div>• 本地网关: http://localhost:8080/ipfs/[CID]</div>
-                <div>• 公共网关: https://ipfs.io/ipfs/[CID]</div>
-                <div>• 上传后可直接点击预览按钮访问</div>
-              </div>
-            </div>
-          </div>
-          
-          <Alert>
-            <AlertDescription>
-              <strong>注意：</strong>上传到IPFS的数据是永久性的，请确保您有权利分享这些内容。
-              当前使用本地IPFS节点，请确保IPFS节点正在运行。
-            </AlertDescription>
-          </Alert>
-
-          <Alert className="border-blue-200 bg-blue-50">
-            <AlertDescription className="text-blue-700">
-              <strong>💡 WebUI中看不到文件？</strong><br/>
-              • 这是正常现象，上传的文件需要pin后才会在WebUI中显示<br/>
-              • 使用"手动Pin工具"确保文件被正确pin<br/>
-              • 文件可能被存储在IPFS的临时缓存中<br/>
-              • 通过网关URL仍可正常访问文件
-            </AlertDescription>
-          </Alert>
-        </CardContent>
-      </Card>
-
-      {/* IPFS API测试工具 */}
-      <Card>
-        <CardHeader>
-          <CardTitle>IPFS API测试工具</CardTitle>
-          <CardDescription>
-            测试IPFS代理API是否正常工作
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <IPFSAPITester />
-        </CardContent>
-      </Card>
-
-      {/* IPFS诊断工具 */}
-      <Card>
-        <CardHeader>
-          <CardTitle>IPFS节点诊断工具</CardTitle>
-          <CardDescription>
-            检查IPFS节点状态、文件pin情况和仓库信息
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <IPFSDiagnostic cid={uploadResult.metadataResult?.cid} />
         </CardContent>
       </Card>
     </div>

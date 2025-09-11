@@ -15,7 +15,7 @@ contract DeployRWAStaking is Script {
         vm.startBroadcast(deployerPrivateKey);
 
         // Get existing RWA20 contract address from environment variable or hardcode for local testing
-        address tokenAddress = address(0x5FbDB2315678afecb367f032d93F642f64180aa3);
+        address tokenAddress = address(0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512);
 
         //如果没有提供rwa20地址，则部署异常
         if (tokenAddress == address(0)) {

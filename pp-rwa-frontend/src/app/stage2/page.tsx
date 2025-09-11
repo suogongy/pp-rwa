@@ -6,6 +6,7 @@ import { Navigation } from '@/components/Navigation'
 import { WalletConnect } from '@/components/WalletConnect'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { Button } from '@/components/ui/button'
 import { NFTManagement } from '@/components/stage2/NFTManagement'
 import { StakingManagement } from '@/components/stage2/StakingManagement'
 import { IPFSUpload } from '@/components/IPFSUpload'
@@ -108,6 +109,14 @@ export default function Stage2Page() {
                     
                     <TabsContent value="ipfs" className="mt-6">
                       <IPFSUpload />
+                      <div className="mt-6 text-center">
+                        <Button 
+                          variant="outline"
+                          onClick={() => window.open('/ipfs', '_blank')}
+                        >
+                          📊 打开IPFS管理中心
+                        </Button>
+                      </div>
                     </TabsContent>
                   </Tabs>
                 </div>
