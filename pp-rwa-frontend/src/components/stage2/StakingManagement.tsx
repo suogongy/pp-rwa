@@ -36,6 +36,7 @@ export function StakingManagement({ address }: StakingManagementProps) {
   const [stakeId, setStakeId] = useState('')
   const [compoundAmount, setCompoundAmount] = useState('')
   const [userStakes, setUserStakes] = useState<StakeInfo[]>([])
+  const [latestStakeId, setLatestStakeId] = useState<string>('')
   
   // 错误状态
   const [errors, setErrors] = useState<{
@@ -117,7 +118,7 @@ export function StakingManagement({ address }: StakingManagementProps) {
     functionName: 'getStakeInfo',
     args: [stakeId as `0x${string}`],
     query: {
-      enabled: false,
+      enabled: !!stakeId, // 只有当stakeId存在时才启用查询
     }
   })
 
@@ -136,7 +137,13 @@ export function StakingManagement({ address }: StakingManagementProps) {
   })
 
   // 合约写入操作
-  const { writeContract, isPending: isStakePending, data: stakeData, error: stakeError } = useWriteContract()
+  const { 
+    writeContract, 
+    isPending: isStakePending, 
+    data: stakeData, 
+    error: stakeError,
+    isSuccess: isStakeWriteSuccess 
+  } = useWriteContract()
   const { writeContract: writeUnstake, isPending: isUnstakePending, data: unstakeData, error: unstakeError } = useWriteContract()
   const { writeContract: writeClaim, isPending: isClaimPending, data: claimData, error: claimError } = useWriteContract()
   const { writeContract: writeCompound, isPending: isCompoundPending, data: compoundData, error: compoundError } = useWriteContract()
@@ -189,40 +196,27 @@ export function StakingManagement({ address }: StakingManagementProps) {
 
   // 更新用户质押列表
   useEffect(() => {
-    if (userStakeIds && Array.isArray(userStakeIds)) {
-      const fetchStakeDetails = async () => {
-        const stakes: StakeInfo[] = []
-        for (const stakeId of userStakeIds) {
-          try {
-            // 这里需要调用合约获取质押详情
-            // 由于合约调用的限制，我们暂时使用占位符
-            const details = await refetchStakeDetails()
-            if (details.data) {
-              stakes.push({
-                user: details.data[0] as string,
-                amount: formatEther(details.data[1] as bigint),
-                startTime: new Date(Number(details.data[2]) * 1000).toLocaleDateString(),
-                endTime: new Date(Number(details.data[3]) * 1000).toLocaleDateString(),
-                rewardRate: (Number(details.data[4]) / 100).toFixed(2) + '%',
-                lockPeriod: (Number(details.data[5]) / 86400).toFixed(0) + '天',
-                rewardMultiplier: (Number(details.data[6]) / 100).toFixed(2) + 'x',
-                lastRewardTime: new Date(Number(details.data[7]) * 1000).toLocaleDateString(),
-                claimedRewards: formatEther(details.data[8] as bigint),
-                isActive: details.data[9] as boolean,
-                isCompounded: details.data[10] as boolean,
-                pendingRewards: '0' // 需要额外计算
-              })
-            }
-          } catch (error) {
-            console.error('Error fetching stake details:', error)
-          }
-        }
-        setUserStakes(stakes)
-      }
-      
-      fetchStakeDetails()
+    if (userStakeIds && Array.isArray(userStakeIds) && userStakeIds.length > 0) {
+      // 暂时显示质押ID列表，让用户可以复制使用
+      const stakes: StakeInfo[] = userStakeIds.map((stakeId, index) => ({
+        user: address || '',
+        amount: '需要查询',
+        startTime: '需要查询',
+        endTime: '需要查询',
+        rewardRate: '需要查询',
+        lockPeriod: '需要查询',
+        rewardMultiplier: '需要查询',
+        lastRewardTime: '需要查询',
+        claimedRewards: '0',
+        isActive: true,
+        isCompounded: false,
+        pendingRewards: '0'
+      }))
+      setUserStakes(stakes)
+    } else {
+      setUserStakes([])
     }
-  }, [userStakeIds])
+  }, [userStakeIds, address])
 
   const handleApprove = async () => {
     if (!stakeAmount || !address) return
@@ -340,6 +334,14 @@ export function StakingManagement({ address }: StakingManagementProps) {
       setErrors({})
     }
   }, [isStakeSuccess, isUnstakeSuccess, isClaimSuccess, isCompoundSuccess, isApproveSuccess])
+
+  // 当用户质押列表更新时，自动设置最新的质押ID
+  useEffect(() => {
+    if (userStakeIds && Array.isArray(userStakeIds) && userStakeIds.length > 0) {
+      const latestStakeId = userStakeIds[userStakeIds.length - 1]
+      setStakeId(latestStakeId as string)
+    }
+  }, [userStakeIds])
 
   return (
     <div className="space-y-6">
@@ -552,12 +554,40 @@ export function StakingManagement({ address }: StakingManagementProps) {
                       <div className="text-sm">{stake.rewardRate}</div>
                     </div>
                   </div>
-                  <div className="mt-4 flex flex-wrap gap-2">
-                    <Badge className={stake.isActive ? "bg-green-500" : "bg-gray-500"}>
-                      {stake.isActive ? "活跃" : "已结束"}
-                    </Badge>
-                    {stake.isCompounded && <Badge className="bg-blue-500">已复投</Badge>}
-                    <Badge variant="outline">{stake.rewardMultiplier}</Badge>
+                  <div className="mt-4 space-y-2">
+                    <div>
+                      <Label className="text-sm font-medium">质押ID</Label>
+                      <div className="text-xs font-mono bg-gray-100 p-2 rounded break-all">
+                        {userStakeIds && Array.isArray(userStakeIds) ? userStakeIds[index] : '加载中...'}
+                      </div>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      <Badge className={stake.isActive ? "bg-green-500" : "bg-gray-500"}>
+                        {stake.isActive ? "活跃" : "已结束"}
+                      </Badge>
+                      {stake.isCompounded && <Badge className="bg-blue-500">已复投</Badge>}
+                      <Badge variant="outline">{stake.rewardMultiplier}</Badge>
+                      <Badge variant="outline">待领取奖励: {stake.pendingRewards} RWA</Badge>
+                    </div>
+                    <div className="flex gap-2">
+                      <Button 
+                        size="sm" 
+                        variant="outline"
+                        onClick={() => setStakeId(userStakeIds[index] as string)}
+                      >
+                        使用此质押ID
+                      </Button>
+                      <Button 
+                        size="sm" 
+                        variant="outline"
+                        onClick={() => {
+                          navigator.clipboard.writeText(userStakeIds[index] as string)
+                          alert('质押ID已复制到剪贴板')
+                        }}
+                      >
+                        复制ID
+                      </Button>
+                    </div>
                   </div>
                 </div>
               ))}
@@ -672,6 +702,59 @@ export function StakingManagement({ address }: StakingManagementProps) {
           </CardContent>
         </Card>
       </div>
+
+      {/* 当前选择的质押详情 */}
+      {stakeId && (
+        <Card>
+          <CardHeader>
+            <CardTitle>当前质押详情</CardTitle>
+            <CardDescription>质押ID: {stakeId}</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {stakeDetails && stakeDetails.length > 0 ? (
+              <div className="space-y-2">
+                <div className="grid md:grid-cols-3 gap-4">
+                  <div>
+                    <Label className="text-sm font-medium">质押数量</Label>
+                    <div className="text-lg font-semibold">{stakeDetails[1] ? formatEther(BigInt(stakeDetails[1] as bigint)) : '0'} RWA</div>
+                  </div>
+                  <div>
+                    <Label className="text-sm font-medium">开始时间</Label>
+                    <div className="text-sm">{stakeDetails[2] ? new Date(Number(stakeDetails[2]) * 1000).toLocaleDateString() : '加载中...'}</div>
+                  </div>
+                  <div>
+                    <Label className="text-sm font-medium">结束时间</Label>
+                    <div className="text-sm">{stakeDetails[3] ? new Date(Number(stakeDetails[3]) * 1000).toLocaleDateString() : '加载中...'}</div>
+                  </div>
+                  <div>
+                    <Label className="text-sm font-medium">奖励率</Label>
+                    <div className="text-sm">{stakeDetails[4] ? (Number(stakeDetails[4]) / 100).toFixed(2) + '%' : '0%'}</div>
+                  </div>
+                  <div>
+                    <Label className="text-sm font-medium">待领取奖励</Label>
+                    <div className="text-sm">{stakeDetails[11] ? formatEther(BigInt(stakeDetails[11] as bigint)) : '0'} RWA</div>
+                  </div>
+                  <div>
+                    <Label className="text-sm font-medium">已领取奖励</Label>
+                    <div className="text-sm">{stakeDetails[8] ? formatEther(BigInt(stakeDetails[8] as bigint)) : '0'} RWA</div>
+                  </div>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <Badge className={stakeDetails[9] ? "bg-green-500" : "bg-gray-500"}>
+                    {stakeDetails[9] ? "活跃" : "已结束"}
+                  </Badge>
+                  {stakeDetails[10] && <Badge className="bg-blue-500">已复投</Badge>}
+                  <Badge variant="outline">奖励倍数: {stakeDetails[6] ? (Number(stakeDetails[6]) / 100).toFixed(2) + 'x' : '1x'}</Badge>
+                </div>
+              </div>
+            ) : (
+              <div className="text-center text-gray-500">
+                正在加载质押详情...
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
 
       {/* 复投操作 */}
       <Card>
