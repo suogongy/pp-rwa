@@ -722,9 +722,9 @@ export function MultisigManagement({ address }: { address: string }) {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-blue-600">
-              {ownersLoading ? '加载中...' : ownersList.length}/{requiredConfirmationsValue.toString()}
+              {ownersLoading ? '加载中...' : requiredConfirmationsValue.toString()}/{ownersList.length}
             </div>
-            <p className="text-sm text-gray-600">当前/阈值</p>
+            <p className="text-sm text-gray-600">阈值/总数</p>
             {ownersError && (
               <p className="text-xs text-red-600 mt-1">错误: {ownersError.message}</p>
             )}
