@@ -47,9 +47,9 @@ const RWAGovernor = () => {
     calldatas: [] as string[],
   });
 
-  // 合约配置
-  const governorAddress = '0x9A676e781A523b5d0C0e43731313A708CB607508';
-  const tokenAddress = '0x0DCd1Bf9A1b36cE34237eEaFef220932846BCD82';
+  // 合约配置 - 使用现有的RWA20代币和新治理合约
+  const governorAddress = '0x922D6956C99E12DFeB3224DEA977D0939758A1Fe';
+  const tokenAddress = '0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512';
 
   // 读取治理参数
   const { data: quorumData } = useReadContract({

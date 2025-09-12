@@ -32,6 +32,7 @@ export function GovernanceManagement({ address }: { address: string }) {
   const [newProposalValue, setNewProposalValue] = useState('')
   const [newProposalCalldata, setNewProposalCalldata] = useState('')
   const [voteReason, setVoteReason] = useState('')
+  const [delegateAddress, setDelegateAddress] = useState('')
 
   const { writeContract, isPending, data: hash } = useWriteContract()
   const { isLoading: isConfirming, isSuccess: isConfirmed } = useWaitForTransactionReceipt({ hash })
@@ -43,9 +44,16 @@ export function GovernanceManagement({ address }: { address: string }) {
     functionName: 'getProposalCount',
   })
 
+  // 获取治理代币地址
+  const { data: governanceTokenAddress } = useReadContract({
+    address: RWAGovernor_ADDRESS,
+    abi: RWAGovernor_ABI,
+    functionName: 'token',
+  })
+
   // 读取代币余额（投票权重）
   const { data: tokenBalance } = useReadContract({
-    address: process.env.NEXT_PUBLIC_RWA20_ADDRESS as `0x${string}`,
+    address: governanceTokenAddress as `0x${string}`,
     abi: [
       {
         inputs: [{ name: 'account', type: 'address' }],
@@ -56,6 +64,38 @@ export function GovernanceManagement({ address }: { address: string }) {
       },
     ],
     functionName: 'balanceOf',
+    args: [address as `0x${string}`],
+  })
+
+  // 读取当前委托信息
+  const { data: currentDelegate } = useReadContract({
+    address: governanceTokenAddress as `0x${string}`,
+    abi: [
+      {
+        inputs: [{ name: 'account', type: 'address' }],
+        name: 'delegates',
+        outputs: [{ name: '', type: 'address' }],
+        stateMutability: 'view',
+        type: 'function',
+      },
+    ],
+    functionName: 'delegates',
+    args: [address as `0x${string}`],
+  })
+
+  // 读取当前投票权重
+  const { data: currentVotes } = useReadContract({
+    address: governanceTokenAddress as `0x${string}`,
+    abi: [
+      {
+        inputs: [{ name: 'account', type: 'address' }],
+        name: 'getVotes',
+        outputs: [{ name: '', type: 'uint256' }],
+        stateMutability: 'view',
+        type: 'function',
+      },
+    ],
+    functionName: 'getVotes',
     args: [address as `0x${string}`],
   })
 
@@ -327,6 +367,81 @@ export function GovernanceManagement({ address }: { address: string }) {
     console.log('  提案已确认:', isConfirmed)
   }, [isPending, isConfirming, isConfirmed])
 
+  // 委托投票处理函数
+  const handleDelegate = async () => {
+    if (!delegateAddress || !governanceTokenAddress) {
+      console.warn('委托投票失败: 委托地址或代币地址为空')
+      return
+    }
+
+    // 验证地址格式
+    if (!delegateAddress.startsWith('0x') || delegateAddress.length !== 42) {
+      console.warn('委托投票失败: 无效的委托地址格式')
+      return
+    }
+
+    console.log('开始委托投票:')
+    console.log('  委托地址:', delegateAddress)
+    console.log('  代币合约地址:', governanceTokenAddress)
+    console.log('  委托者:', address)
+
+    try {
+      writeContract({
+        address: governanceTokenAddress as `0x${string}`,
+        abi: [
+          {
+            inputs: [{ name: 'delegatee', type: 'address' }],
+            name: 'delegate',
+            outputs: [],
+            stateMutability: 'nonpayable',
+            type: 'function',
+          },
+        ],
+        functionName: 'delegate',
+        args: [delegateAddress as `0x${string}`],
+      })
+      
+      console.log('委托投票交易已发送到区块链，等待确认...')
+      
+    } catch (error) {
+      console.error('委托投票失败:', error)
+    }
+  }
+
+  // 自我委托（激活投票权）
+  const handleSelfDelegate = async () => {
+    if (!address || !governanceTokenAddress) {
+      console.warn('自我委托失败: 地址信息不完整')
+      return
+    }
+
+    console.log('开始自我委托（激活投票权）:')
+    console.log('  地址:', address)
+    console.log('  代币合约地址:', governanceTokenAddress)
+
+    try {
+      writeContract({
+        address: governanceTokenAddress as `0x${string}`,
+        abi: [
+          {
+            inputs: [{ name: 'delegatee', type: 'address' }],
+            name: 'delegate',
+            outputs: [],
+            stateMutability: 'nonpayable',
+            type: 'function',
+          },
+        ],
+        functionName: 'delegate',
+        args: [address as `0x${string}`],
+      })
+      
+      console.log('自我委托交易已发送到区块链，等待确认...')
+      
+    } catch (error) {
+      console.error('自我委托失败:', error)
+    }
+  }
+
   return (
     <div className="space-y-6">
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
@@ -336,7 +451,7 @@ export function GovernanceManagement({ address }: { address: string }) {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-blue-600">
-              {tokenBalance ? formatEther(tokenBalance).toFixed(2) : '0'}
+              {tokenBalance ? parseFloat(formatEther(tokenBalance)).toFixed(2) : '0'}
             </div>
             <p className="text-sm text-gray-600">RWA20代币数量</p>
           </CardContent>
@@ -368,14 +483,59 @@ export function GovernanceManagement({ address }: { address: string }) {
 
         <Card>
           <CardHeader className="pb-3">
-            <CardTitle className="text-lg">投票状态</CardTitle>
+            <CardTitle className="text-lg">委托信息</CardTitle>
           </CardHeader>
           <CardContent>
-            <Badge className="bg-green-500">活跃</Badge>
-            <p className="text-sm text-gray-600 mt-1">可以参与投票</p>
+            <div className="text-sm">
+              <div className="font-medium text-blue-600">
+                当前委托: {currentDelegate === address ? '自己' : (currentDelegate || '未委托')}
+              </div>
+              <div className="text-gray-600 mt-1">
+                激活投票数: {currentVotes ? parseFloat(formatEther(currentVotes)).toFixed(2) : '0'}
+              </div>
+            </div>
           </CardContent>
         </Card>
       </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>委托投票</CardTitle>
+          <CardDescription>委托你的投票权给他人或自我委托以激活投票权</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="flex flex-col sm:flex-row gap-4">
+            <div className="flex-1">
+              <Label htmlFor="delegate-address">委托地址</Label>
+              <Input
+                id="delegate-address"
+                placeholder="输入要委托的地址 (0x...)"
+                value={delegateAddress}
+                onChange={(e) => setDelegateAddress(e.target.value)}
+              />
+            </div>
+            <div className="flex gap-2 items-end">
+              <Button 
+                onClick={handleDelegate}
+                disabled={!delegateAddress || isPending}
+                className="bg-blue-600 hover:bg-blue-700"
+              >
+                委托投票
+              </Button>
+              <Button 
+                onClick={handleSelfDelegate}
+                disabled={isPending}
+                variant="outline"
+              >
+                自我委托
+              </Button>
+            </div>
+          </div>
+          <p className="text-sm text-gray-600">
+            注意：首次使用需要自我委托以激活投票权。委托后你的代币将按照委托地址的投票意愿进行投票。
+          </p>
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader>

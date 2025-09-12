@@ -8,6 +8,7 @@ optimizer_runs = 200
 gas_reports = ["RWA20"]
 bytecode_hash = "none"
 cbor = false
+dotenv = [".env"]
 
 # 测试配置
 [profile.default.fuzz]

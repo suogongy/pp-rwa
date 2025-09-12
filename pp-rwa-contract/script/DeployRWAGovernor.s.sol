@@ -24,35 +24,12 @@ contract DeployRWAGovernor is Script {
         console.log("Deployer address:", deployer);
         console.log("Deployer balance:", deployer.balance);
         
-        // TODO: Need to deploy RWA20 governance token first, then configure token address
-        // Use environment variable to get governance token address, deploy new one if not exists
-        address governanceTokenAddress = vm.envOr("GOVERNANCE_TOKEN_ADDRESS", address(0));
-        
-        IVotes token;
-        
-        if (governanceTokenAddress == address(0)) {
-            console.log("Governance token address not found, deploying new RWA20 governance token...");
-            
-            // 部署RWA20治理代币
-            string memory tokenName = "RWA Governance Token";
-            string memory tokenSymbol = "GOV";
-            address initialOwner = deployer;
-            
-            RWA20 newToken = new RWA20(tokenName, tokenSymbol, initialOwner);
-            token = IVotes(address(newToken));
-            
-            console.log("Governance token deployed at:", address(newToken));
-            console.log("Token name:", tokenName);
-            console.log("Token symbol:", tokenSymbol);
-            console.log("Initial owner:", initialOwner);
-            
-            // Mint some tokens for deployer for governance testing
-            newToken.mint(deployer, 1000000 * 10**18);
-            console.log("Minted 1,000,000 governance tokens for deployer");
-        } else {
-            console.log("Using existing governance token:", governanceTokenAddress);
-            token = IVotes(governanceTokenAddress);
-        }
+        // Use the existing RWA20 contract address for governance
+        //改为读取.env中的GOVERNANCE_TOKEN_ADDRESS
+        address governanceTokenAddress = vm.envAddress("GOVERNANCE_TOKEN_ADDRESS");
+        require(address(governanceTokenAddress) != address(0), "Invalid governance token address");
+        console.log("Using existing RWA20 token for governance:", governanceTokenAddress);
+        IVotes token = IVotes(governanceTokenAddress);
         
         // 部署治理合约 (需要TimelockController)
         uint256 votingDelay = 1; // 1 block

@@ -2,22 +2,26 @@
 pragma solidity ^0.8.20;
 
 import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
+import "@openzeppelin/contracts/token/ERC20/extensions/ERC20Permit.sol";
+import "@openzeppelin/contracts/token/ERC20/extensions/ERC20Votes.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/utils/Pausable.sol";
 import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 
 /**
  * @title RWA20
- * @dev Real World Asset Tokenization Contract - Optimized version based on OpenZeppelin standard library
+ * @dev Real World Asset Tokenization Contract - Governance-enabled version based on OpenZeppelin standard library
  *
  * Main Features:
  * 1. Standard Compliance - Fully compatible with ERC20 standard
- * 2. Security - Using OpenZeppelin security modules
- * 3. Gas Optimization - Improved algorithms and data structures
- * 4. Scalability - Modular design for easy upgrades
- * 5. Compliance - Built-in pause and access control
+ * 2. Governance Support - Implements IERC5805 for governance voting
+ * 3. Security - Using OpenZeppelin security modules
+ * 4. Gas Optimization - Improved algorithms and data structures
+ * 5. Scalability - Modular design for easy upgrades
+ * 6. Compliance - Built-in pause and access control
+ * 7. Voting Support - Delegation and historical vote tracking
  */
-contract RWA20 is ERC20, Ownable, Pausable, ReentrancyGuard {
+contract RWA20 is ERC20, ERC20Permit, ERC20Votes, Ownable, Pausable, ReentrancyGuard {
     // Event definitions - Extending ERC20 standard events
     event TokensMinted(address indexed to, uint256 amount, bytes32 indexed txId);
     event TokensBurned(address indexed from, uint256 amount, bytes32 indexed txId);
@@ -32,17 +36,18 @@ contract RWA20 is ERC20, Ownable, Pausable, ReentrancyGuard {
     uint256 private constant INITIAL_SUPPLY = 1000000 * 10 ** 18; // 1 million tokens
 
     /**
-     * @dev Constructor - Using OpenZeppelin's ERC20 constructor
+     * @dev Constructor - Using OpenZeppelin's ERC20Votes constructor
      */
     constructor(string memory name_, string memory symbol_, address initialOwner)
         ERC20(name_, symbol_)
+        ERC20Permit(name_)
         Ownable(initialOwner)
     {
         _mint(initialOwner, INITIAL_SUPPLY);
     }
 
     /**
-     * @dev Mint new tokens - Optimized minting function
+     * @dev Mint new tokens - Optimized minting function with voting weight updates
      * @param to Recipient address
      * @param amount Minting amount
      */
@@ -59,7 +64,7 @@ contract RWA20 is ERC20, Ownable, Pausable, ReentrancyGuard {
     }
 
     /**
-     * @dev Burn tokens - Improved burning function
+     * @dev Burn tokens - Improved burning function with voting weight updates
      * @param amount Burning amount
      */
     function burn(uint256 amount) public whenNotPaused nonReentrant {
@@ -160,14 +165,21 @@ contract RWA20 is ERC20, Ownable, Pausable, ReentrancyGuard {
     }
 
     /**
-     * @dev Override _update function to add additional security checks
+     * @dev Override _update function to add additional security checks and voting weight updates
      * Using OpenZeppelin's _update as base
      */
-    function _update(address from, address to, uint256 amount) internal override whenNotPaused {
+    function _update(address from, address to, uint256 amount) internal override(ERC20, ERC20Votes) whenNotPaused {
         // Can add additional business logic checks
         // For example: specific transfer restrictions or compliance checks
 
         super._update(from, to, amount);
+    }
+
+    /**
+     * @dev Override nonces function for ERC20Permit compatibility
+     */
+    function nonces(address owner) public view virtual override(ERC20Permit, Nonces) returns (uint256) {
+        return super.nonces(owner);
     }
 
     /**
