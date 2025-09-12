@@ -134,46 +134,46 @@ cp .env.example .env
 ### 单个合约部署
 ```bash
 # 部署 RWA20 合约
-forge script script/DeployRWA20.s.sol:DeployRWA20 --rpc-url $env:LOCAL_RPC_URL --private-key $env:PRIVATE_KEY --broadcast
+forge script script/DeployRWA20.s.sol:DeployRWA20 --rpc-url $LOCAL_RPC_URL --private-key $PRIVATE_KEY --broadcast
 
 # 部署 RWA721 合约
-forge script script/DeployRWA721.s.sol:DeployRWA721 --rpc-url $env:LOCAL_RPC_URL --private-key $env:PRIVATE_KEY --broadcast
+forge script script/DeployRWA721.s.sol:DeployRWA721 --rpc-url $LOCAL_RPC_URL --private-key $PRIVATE_KEY --broadcast
 
 # 部署 RWAStaking 合约（需要先部署 RWA20）
 # 方法1：让脚本自动部署 RWA20
-forge script script/DeployRWAStaking.s.sol:DeployRWAStaking --rpc-url $env:LOCAL_RPC_URL --private-key $env:PRIVATE_KEY --broadcast
+forge script script/DeployRWAStaking.s.sol:DeployRWAStaking --rpc-url $LOCAL_RPC_URL --private-key $PRIVATE_KEY --broadcast
 
 # 方法2：使用已部署的 RWA20 地址
 export RWA20_ADDRESS=0xYourRWA20ContractAddress
-forge script script/DeployRWAStaking.s.sol:DeployRWAStaking --rpc-url $env:LOCAL_RPC_URL --private-key $env:PRIVATE_KEY --broadcast
+forge script script/DeployRWAStaking.s.sol:DeployRWAStaking --rpc-url $LOCAL_RPC_URL --private-key $PRIVATE_KEY --broadcast
 ```
 
 ### 批量部署
 ```bash
 # 部署所有合约（推荐）
-forge script script/DeployAll.s.sol:DeployAll --rpc-url $env:LOCAL_RPC_URL --private-key $env:PRIVATE_KEY --broadcast
+forge script script/DeployAll.s.sol:DeployAll --rpc-url $LOCAL_RPC_URL --private-key $PRIVATE_KEY --broadcast
 ```
 
 ### 测试网部署
 ```bash
 # 部署到 Sepolia 测试网
 forge script script/DeployAll.s.sol:DeployAll \
-  --rpc-url $env:SEPOLIA_RPC_URL \
-  --private-key $env:PRIVATE_KEY \
+  --rpc-url $SEPOLIA_RPC_URL \
+  --private-key $PRIVATE_KEY \
   --broadcast \
   --verify \
-  --etherscan-api-key $env:ETHERSCAN_API_KEY
+  --etherscan-api-key $ETHERSCAN_API_KEY
 ```
 
 ### 主网部署
 ```bash
 # 部署到以太坊主网
 forge script script/DeployAll.s.sol:DeployAll \
-  --rpc-url $env:MAINNET_RPC_URL \
-  --private-key $env:PRIVATE_KEY \
+  --rpc-url $MAINNET_RPC_URL \
+  --private-key $PRIVATE_KEY \
   --broadcast \
   --verify \
-  --etherscan-api-key $env:ETHERSCAN_API_KEY
+  --etherscan-api-key $ETHERSCAN_API_KEY
 ```
 
 ### 部署后配置
@@ -232,21 +232,21 @@ compound(bytes32 stakeId, uint256 additionalAmount) // 复利质押
 ### 使用 Cast 命令行工具
 ```bash
 # RWA20 代币交互
-cast call <RWA20_ADDRESS> "name()(string)" --rpc-url $env:LOCAL_RPC_URL
-cast call <RWA20_ADDRESS> "balanceOf(address)(uint256)" <WALLET_ADDRESS> --rpc-url $env:LOCAL_RPC_URL
+cast call <RWA20_ADDRESS> "name()(string)" --rpc-url $LOCAL_RPC_URL
+cast call <RWA20_ADDRESS> "balanceOf(address)(uint256)" <WALLET_ADDRESS> --rpc-url $LOCAL_RPC_URL
 cast send <RWA20_ADDRESS> "transfer(address,uint256)" <RECIPIENT> <AMOUNT> \
-  --private-key $env:PRIVATE_KEY --rpc-url $env:LOCAL_RPC_URL
+  --private-key $PRIVATE_KEY --rpc-url $LOCAL_RPC_URL
 
 # RWA721 NFT 交互
-cast call <RWA721_ADDRESS> "tokenURI(uint256)(string)" <TOKEN_ID> --rpc-url $env:LOCAL_RPC_URL
-cast call <RWA721_ADDRESS> "ownerOf(uint256)(address)" <TOKEN_ID> --rpc-url $env:LOCAL_RPC_URL
+cast call <RWA721_ADDRESS> "tokenURI(uint256)(string)" <TOKEN_ID> --rpc-url $LOCAL_RPC_URL
+cast call <RWA721_ADDRESS> "ownerOf(uint256)(address)" <TOKEN_ID> --rpc-url $LOCAL_RPC_URL
 cast send <RWA721_ADDRESS> "mintNFT(address,string)" <RECIPIENT> <TOKEN_URI> \
-  --private-key $env:PRIVATE_KEY --rpc-url $env:LOCAL_RPC_URL
+  --private-key $PRIVATE_KEY --rpc-url $LOCAL_RPC_URL
 
 # RWAStaking 质押交互
-cast call <RWA_STAKING_ADDRESS> "getUserStakes(address)(tuple[])" <USER_ADDRESS> --rpc-url $env:LOCAL_RPC_URL
+cast call <RWA_STAKING_ADDRESS> "getUserStakes(address)(tuple[])" <USER_ADDRESS> --rpc-url $LOCAL_RPC_URL
 cast send <RWA_STAKING_ADDRESS> "stake(uint256,uint256)" <AMOUNT> <LOCK_PERIOD> \
-  --private-key $env:PRIVATE_KEY --rpc-url $env:LOCAL_RPC_URL
+  --private-key $PRIVATE_KEY --rpc-url $LOCAL_RPC_URL
 ```
 
 ### 前端集成

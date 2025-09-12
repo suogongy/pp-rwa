@@ -2885,6 +2885,19 @@ export const RWAOracle_ABI = [
   },
   {
     "inputs": [],
+    "name": "randomRequestCount",
+    "outputs": [
+      {
+        "internalType": "uint256",
+        "name": "",
+        "type": "uint256"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
     "name": "getPriceFeedCount",
     "outputs": [
       {
