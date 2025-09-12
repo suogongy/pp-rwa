@@ -8,6 +8,8 @@ import "../src/RWAGovernor.sol";
 import "../src/RWAMultisigWallet.sol";
 import "../src/RWAOracle.sol";
 import "../src/RWAUpgradeableProxy.sol";
+import "@openzeppelin/contracts/governance/TimelockController.sol";
+import "@openzeppelin/contracts/governance/utils/IVotes.sol";
 import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 
 contract TestToken is ERC20 {
@@ -31,14 +33,19 @@ contract DeployPhase3 is Script {
         RWA20 governanceToken = new RWA20("RWA Governance Token", "GOV", msg.sender);
         console.log("Governance Token deployed at:", address(governanceToken));
         
-        // 2. 部署治理合约
-        RWAGovernor governor = new RWAGovernor(
-            governanceToken,
-            1, // votingDelay
-            50400, // votingPeriod (约1周)
-            1000 * 10**18, // proposalThreshold
-            4 // quorumNumerator (4%)
-        );
+        // 2. 部署治理合约 (需要TimelockController)
+        // TODO: Deploy TimelockController first and pass it to Governor
+        // For now, deploying a simple timelock controller
+        uint256 minDelay = 1 days;
+        address[] memory proposers = new address[](1);
+        proposers[0] = msg.sender;
+        address[] memory executors = new address[](1);
+        executors[0] = msg.sender;
+        
+        TimelockController timelock = new TimelockController(minDelay, proposers, executors, msg.sender);
+        console.log("TimelockController deployed at:", address(timelock));
+        
+        RWAGovernor governor = new RWAGovernor(IVotes(address(governanceToken)), timelock);
         console.log("Governor deployed at:", address(governor));
         
         // 5. 部署多签钱包
