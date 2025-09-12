@@ -12,12 +12,6 @@ import "@openzeppelin/contracts/governance/TimelockController.sol";
 import "@openzeppelin/contracts/governance/utils/IVotes.sol";
 import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 
-contract TestToken is ERC20 {
-    constructor() ERC20("RWA Governance Token", "RWA") {
-        _mint(msg.sender, 1000000 * 10**18);
-    }
-}
-
 contract DeployPhase3 is Script {
     function run() external {
         uint256 deployerPrivateKey = vm.envUint("PRIVATE_KEY");
@@ -29,7 +23,6 @@ contract DeployPhase3 is Script {
         console.log("Deployer balance:", deployer.balance);
         
         // 1. 部署治理代币
-        // TestToken governanceToken = new TestToken();
         RWA20 governanceToken = new RWA20("RWA Governance Token", "GOV", msg.sender);
         console.log("Governance Token deployed at:", address(governanceToken));
         
@@ -107,7 +100,7 @@ contract DeployPhase3 is Script {
         // 14. 输出验证信息
         console.log("\n=== Verification Commands ===");
         console.log("Governor Token:");
-        console.log("forge verify-contract --chain-id 11155111 --compiler-version v0.8.19 --num-of-optimizations 200", address(governanceToken), "src/DeployPhase3.sol:TestToken");
+        console.log("forge verify-contract --chain-id 11155111 --compiler-version v0.8.19 --num-of-optimizations 200", address(governanceToken), "src/DeployPhase3.sol:RWA20");
         
         console.log("\nGovernor:");
         console.log("forge verify-contract --chain-id 11155111 --compiler-version v0.8.19 --num-of-optimizations 200", address(governor), "src/RWAGovernor.sol:RWAGovernor");

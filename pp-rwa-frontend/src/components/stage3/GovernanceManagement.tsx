@@ -486,13 +486,36 @@ export function GovernanceManagement({ address }: { address: string }) {
             <CardTitle className="text-lg">委托信息</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-sm">
-              <div className="font-medium text-blue-600">
-                当前委托: {currentDelegate === address ? '自己' : (currentDelegate || '未委托')}
-              </div>
-              <div className="text-gray-600 mt-1">
-                激活投票数: {currentVotes ? parseFloat(formatEther(currentVotes)).toFixed(2) : '0'}
-              </div>
+            <div className="space-y-2">
+              {currentDelegate && currentDelegate !== '0x0000000000000000000000000000000000000000' ? (
+                <>
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-medium text-gray-700">委托状态:</span>
+                    <Badge variant={currentDelegate === address ? 'default' : 'secondary'}>
+                      {currentDelegate === address ? '自我委托' : '已委托'}
+                    </Badge>
+                  </div>
+                  <div className="text-sm">
+                    <span className="text-gray-600">委托地址: </span>
+                    <span className="font-mono text-xs">
+                      {currentDelegate === address 
+                        ? '自己' 
+                        : `${currentDelegate.slice(0, 6)}...${currentDelegate.slice(-4)}`}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-gray-600">激活投票数:</span>
+                    <span className="text-sm font-medium text-blue-600">
+                      {currentVotes ? parseFloat(formatEther(currentVotes)).toFixed(2) : '0'}
+                    </span>
+                  </div>
+                </>
+              ) : (
+                <div className="text-center py-2">
+                  <div className="text-sm text-gray-500 mb-1">未激活投票权</div>
+                  <div className="text-xs text-gray-400">请进行自我委托以激活投票权</div>
+                </div>
+              )}
             </div>
           </CardContent>
         </Card>

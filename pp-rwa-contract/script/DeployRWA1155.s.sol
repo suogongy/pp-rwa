@@ -165,20 +165,26 @@ contract DeployRWA1155 is Script {
         // Verify balances
         console.log("\n=== Balance Verification ===");
         console.log("Deployer balance:");
+        uint256 deployerBalance;
         for (uint256 i = 0; i < tokenIds.length; i++) {
-            try rwa1155.balanceOf(deployer, tokenIds[i]) returns (uint256 balance) {
-                console.log("  Token", tokenIds[i], ":", balance);
+            uint256 currentTokenId = tokenIds[i];
+            try rwa1155.balanceOf(deployer, currentTokenId) returns (uint256 balance) {
+                deployerBalance = balance;
+                console.log("  Token", currentTokenId, ":", deployerBalance);
             } catch {
-                console.log("  Token", tokenIds[i], ": Get failed");
+                console.log("  Token", currentTokenId, ": Get failed");
             }
         }
         
         console.log("Test address balance:");
+        uint256 testBalance;
         for (uint256 i = 0; i < tokenIds.length; i++) {
-            try rwa1155.balanceOf(testAddress, tokenIds[i]) returns (uint256 balance) {
-                console.log("  Token", tokenIds[i], ":", balance);
+            uint256 currentTokenId = tokenIds[i];
+            try rwa1155.balanceOf(testAddress, currentTokenId) returns (uint256 balance) {
+                testBalance = balance;
+                console.log("  Token", currentTokenId, ":", testBalance);
             } catch {
-                console.log("  Token", tokenIds[i], ": Get failed");
+                console.log("  Token", currentTokenId, ": Get failed");
             }
         }
         
