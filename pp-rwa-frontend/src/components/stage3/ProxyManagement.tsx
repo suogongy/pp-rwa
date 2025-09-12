@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import Link from 'next/link'
 
 interface ProxyInfo {
   address: string
@@ -249,8 +250,17 @@ export function ProxyManagement({ address }: { address: string }) {
 
       <Card>
         <CardHeader>
-          <CardTitle>代理合约管理</CardTitle>
-          <CardDescription>创建和管理可升级代理合约</CardDescription>
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle>代理合约管理</CardTitle>
+              <CardDescription>创建和管理可升级代理合约</CardDescription>
+            </div>
+            <Link href="/stage3/proxy-demo" target="_blank" rel="noopener noreferrer">
+              <Button variant="outline" size="sm">
+                🔄 Counter升级演示
+              </Button>
+            </Link>
+          </div>
         </CardHeader>
         <CardContent>
           <div className="space-y-4">
