@@ -7,6 +7,7 @@ import { WalletConnect } from '@/components/WalletConnect'
 import { GovernanceManagement } from '@/components/stage3/GovernanceManagement'
 import { MultisigManagement } from '@/components/stage3/MultisigManagement'
 import { OracleManagement } from '@/components/stage3/OracleManagement'
+import { ProxyManagement } from '@/components/stage3/ProxyManagement'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Button } from '@/components/ui/button'
@@ -247,32 +248,7 @@ export default function Stage3Page() {
                     </TabsContent>
                     
                     <TabsContent value="proxy" className="mt-6">
-                      <Card>
-                        <CardHeader>
-                          <CardTitle>可升级代理</CardTitle>
-                          <CardDescription>合约升级管理系统</CardDescription>
-                        </CardHeader>
-                        <CardContent>
-                          <div className="space-y-4">
-                            <div className="grid grid-cols-2 gap-4">
-                              <div className="p-4 bg-teal-50 rounded-lg">
-                                <h4 className="font-semibold text-teal-900">当前版本</h4>
-                                <p className="text-2xl font-bold text-teal-600">v1.0.0</p>
-                                <p className="text-sm text-teal-600">合约版本</p>
-                              </div>
-                              <div className="p-4 bg-cyan-50 rounded-lg">
-                                <h4 className="font-semibold text-cyan-900">升级权限</h4>
-                                <p className="text-sm font-medium text-cyan-600">管理员</p>
-                                <p className="text-sm text-cyan-600">当前状态</p>
-                              </div>
-                            </div>
-                            <div className="space-y-2">
-                              <Button className="w-full">升级合约</Button>
-                              <Button variant="outline" className="w-full">查看升级历史</Button>
-                            </div>
-                          </div>
-                        </CardContent>
-                      </Card>
+                      <ProxyManagement address={address || ''} />
                     </TabsContent>
                   </Tabs>
                 </div>
