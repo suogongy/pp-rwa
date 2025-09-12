@@ -84,6 +84,10 @@ contract RWAUpgradeableProxy is Ownable {
         uint256 currentVersion = versionHistory[proxy_].length;
         implementation[proxy_] = newImplementation_;
         
+        // 在UUPS模式下，通过代理调用upgradeToAndCall进行实际升级
+        (bool success, ) = proxy_.call(abi.encodeWithSignature("upgradeToAndCall(address,bytes)", newImplementation_, ""));
+        require(success, "Upgrade failed");
+        
         versionHistory[proxy_].push(VersionInfo({
             implementation: newImplementation_,
             version: currentVersion + 1,
