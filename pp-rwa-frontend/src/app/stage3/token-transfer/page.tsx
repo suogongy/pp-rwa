@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useAccount, useReadContract, useWriteContract, useWaitForTransactionReceipt } from 'wagmi'
 import { parseEther, formatEther } from 'viem'
 import { Navigation } from '@/components/Navigation'
@@ -150,6 +150,289 @@ export default function TokenTransferPage() {
       enabled: !!address && !!RWA20_ADDRESS
     }
   })
+  
+  // 获取代币总供应量
+  const { data: totalSupply } = useReadContract({
+    address: RWA20_ADDRESS as `0x${string}`,
+    abi: RWA20_ABI,
+    functionName: 'totalSupply',
+    query: {
+      enabled: !!RWA20_ADDRESS
+    }
+  })
+  
+  // 治理相关状态
+  const [governanceAccounts, setGovernanceAccounts] = useState<string[]>([])
+  const [isDiscoveringAccounts, setIsDiscoveringAccounts] = useState(false)
+  const [discoveryStatus, setDiscoveryStatus] = useState<string>('')
+  const [newAccount, setNewAccount] = useState('')
+  const [accountBalances, setAccountBalances] = useState<{address: string, balance: bigint}[]>([])
+  
+  // 动态发现治理账户
+  const discoverGovernanceAccounts = useCallback(async () => {
+    if (!RWA20_ADDRESS) return
+    
+    setIsDiscoveringAccounts(true)
+    setDiscoveryStatus('正在发现治理账户...')
+    
+    try {
+      const RPC_URL = 'http://127.0.0.1:8545'
+      
+      // 1. 获取合约所有者
+      setDiscoveryStatus('获取合约所有者...')
+      const ownerResponse = await fetch(RPC_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          jsonrpc: '2.0',
+          id: 1,
+          method: 'eth_call',
+          params: [{
+            to: RWA20_ADDRESS,
+            data: '0x8da5cb5b' // owner() function signature
+          }, 'latest']
+        })
+      })
+      
+      const ownerData = await ownerResponse.json()
+      const owner = ownerData.result ? '0x' + ownerData.result.slice(26) : null
+      
+      if (!owner) {
+        throw new Error('无法获取合约所有者')
+      }
+      
+      console.log('Contract owner:', owner)
+      
+      // 2. 获取最新的Transfer事件来发现相关地址
+      setDiscoveryStatus('分析转账事件...')
+      const eventsResponse = await fetch(RPC_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          jsonrpc: '2.0',
+          id: 2,
+          method: 'eth_getLogs',
+          params: [{
+            address: RWA20_ADDRESS,
+            topics: [
+              '0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef' // Transfer event signature
+            ],
+            fromBlock: '0x0',
+            toBlock: 'latest'
+          }]
+        })
+      })
+      
+      const eventsData = await eventsResponse.json()
+      const transferEvents = eventsData.result || []
+      
+      console.log('Found transfer events:', transferEvents.length)
+      
+      // 3. 从事件中提取所有唯一地址
+      const addressSet = new Set<string>()
+      addressSet.add(owner.toLowerCase()) // 添加所有者
+      
+      transferEvents.forEach((event: any) => {
+        const topics = event.topics
+        if (topics.length >= 3) {
+          const from = '0x' + topics[1].slice(26)
+          const to = '0x' + topics[2].slice(26)
+          
+          // 只添加非零地址
+          if (from !== '0x0000000000000000000000000000000000000000') {
+            addressSet.add(from.toLowerCase())
+          }
+          if (to !== '0x0000000000000000000000000000000000000000') {
+            addressSet.add(to.toLowerCase())
+          }
+        }
+      })
+      
+      const allAddresses = Array.from(addressSet)
+      console.log('Discovered addresses:', allAddresses)
+      
+      // 4. 检查每个地址的余额，过滤出有代币的地址
+      setDiscoveryStatus('检查账户余额...')
+      const accountsWithBalance: string[] = []
+      
+      for (const address of allAddresses) {
+        try {
+          const balanceResponse = await fetch(RPC_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              jsonrpc: '2.0',
+              id: 3,
+              method: 'eth_call',
+              params: [{
+                to: RWA20_ADDRESS,
+                data: '0x70a08231' + address.slice(2).padStart(64, '0')
+              }, 'latest']
+            })
+          })
+          
+          const balanceData = await balanceResponse.json()
+          const balance = balanceData.result ? BigInt(balanceData.result) : 0n
+          
+          if (balance > 0n) {
+            accountsWithBalance.push(address)
+            console.log(`Account ${address} has balance: ${balance.toString()}`)
+          }
+        } catch (error) {
+          console.error('Error checking balance for', address, error)
+        }
+      }
+      
+      // 5. 按余额排序，取前10个作为治理账户
+      setDiscoveryStatus('排序账户...')
+      const accountsWithBalances = await Promise.all(
+        accountsWithBalance.map(async (address) => {
+          try {
+            const balanceResponse = await fetch(RPC_URL, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                jsonrpc: '2.0',
+                id: 4,
+                method: 'eth_call',
+                params: [{
+                  to: RWA20_ADDRESS,
+                  data: '0x70a08231' + address.slice(2).padStart(64, '0')
+                }, 'latest']
+              })
+            })
+            
+            const balanceData = await balanceResponse.json()
+            const balance = balanceData.result ? BigInt(balanceData.result) : 0n
+            
+            return { address, balance }
+          } catch (error) {
+            return { address, balance: 0n }
+          }
+        })
+      )
+      
+      // 按余额降序排序
+      accountsWithBalances.sort((a, b) => 
+        b.balance > a.balance ? 1 : b.balance < a.balance ? -1 : 0
+      )
+      
+      const topAccounts = accountsWithBalances.slice(0, 10).map(item => item.address)
+      
+      setGovernanceAccounts(topAccounts)
+      setDiscoveryStatus(`发现 ${topAccounts.length} 个治理账户`)
+      console.log('Top governance accounts:', topAccounts)
+      
+      // 6. 获取这些账户的余额
+      await getGovernanceBalancesForAccounts(topAccounts)
+      
+    } catch (error) {
+      console.error('Error discovering governance accounts:', error)
+      setDiscoveryStatus('发现失败，使用默认账户')
+      
+      // 如果发现失败，使用一些默认的已知地址
+      const fallbackAccounts = [
+        '0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266',
+        '0x70997970C51812dc3A010C7d01b50e0d17dc79C8',
+        '0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC',
+        '0x90F79bf6EB2c4f870365E785982E1f101E93b906',
+      ]
+      setGovernanceAccounts(fallbackAccounts)
+      await getGovernanceBalancesForAccounts(fallbackAccounts)
+    } finally {
+      setIsDiscoveringAccounts(false)
+    }
+  }, [RWA20_ADDRESS])
+  
+  // 获取指定账户列表的余额
+  const getGovernanceBalancesForAccounts = useCallback(async (accounts: string[]) => {
+    if (!RWA20_ADDRESS || accounts.length === 0) return
+    
+    try {
+      const RPC_URL = 'http://127.0.0.1:8545'
+      
+      const balances = await Promise.all(
+        accounts.map(async (account) => {
+          try {
+            const response = await fetch(RPC_URL, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({
+                jsonrpc: '2.0',
+                id: 1,
+                method: 'eth_call',
+                params: [{
+                  to: RWA20_ADDRESS,
+                  data: '0x70a08231' + account.slice(2).padStart(64, '0') // balanceOf function signature + address
+                }, 'latest']
+              })
+            })
+            
+            const data = await response.json()
+            if (data.result) {
+              const balance = BigInt(data.result)
+              console.log(`Balance for ${account}: ${balance.toString()}`)
+              return {
+                address: account,
+                balance: balance
+              }
+            }
+          } catch (error) {
+            console.error('Error fetching balance for', account, error)
+          }
+          
+          return {
+            address: account,
+            balance: 0n
+          }
+        })
+      )
+      
+      console.log('Final balances:', balances)
+      setAccountBalances(balances)
+    } catch (error) {
+      console.error('Error fetching governance balances:', error)
+      const defaultBalances = accounts.map(account => ({
+        address: account,
+        balance: 0n
+      }))
+      setAccountBalances(defaultBalances)
+    }
+  }, [RWA20_ADDRESS])
+  
+  // 获取所有治理账户的余额 - 使用新的函数
+  const getGovernanceBalances = useCallback(async () => {
+    await getGovernanceBalancesForAccounts(governanceAccounts)
+  }, [governanceAccounts, getGovernanceBalancesForAccounts])
+  
+  useEffect(() => {
+    getGovernanceBalances()
+  }, [governanceAccounts, totalSupply, getGovernanceBalances])
+  
+  // 组件加载时自动发现治理账户
+  useEffect(() => {
+    if (RWA20_ADDRESS && governanceAccounts.length === 0) {
+      discoverGovernanceAccounts()
+    }
+  }, [RWA20_ADDRESS, discoverGovernanceAccounts])
+  
+  // 添加新账户
+  const addAccount = () => {
+    if (newAccount && /^0x[a-fA-F0-9]{40}$/.test(newAccount)) {
+      setGovernanceAccounts([...governanceAccounts, newAccount])
+      setNewAccount('')
+    } else {
+      alert('请输入有效的以太坊地址')
+    }
+  }
+  
+  // 计算治理权益占比
+  const calculateGovernanceShare = (balance: bigint) => {
+    if (!totalSupply || totalSupply === 0n) return 0
+    return Number((balance * 10000n) / totalSupply) / 100
+  }
   
   // 合约写入
   const { writeContract, isPending, data: hash } = useWriteContract()
@@ -323,6 +606,26 @@ export default function TokenTransferPage() {
                         <p className="text-xs font-mono text-gray-600 break-all">
                           {RWA20_ADDRESS || '未配置'}
                         </p>
+                        {RWA20_ADDRESS && (
+                          <p className="text-xs text-blue-600 mt-1">
+                            已配置RWA20合约
+                          </p>
+                        )}
+                      </div>
+                    </CardContent>
+                  </Card>
+                  
+                  <Card className="mt-6">
+                    <CardHeader>
+                      <CardTitle>代币总供应量</CardTitle>
+                      <CardDescription>RWA20代币总供应量</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="text-center">
+                        <p className="text-3xl font-bold text-blue-600">
+                          {totalSupply ? formatEther(totalSupply) : '0'}
+                        </p>
+                        <p className="text-sm text-gray-600">{tokenSymbol || 'RWA'}</p>
                       </div>
                     </CardContent>
                   </Card>
@@ -338,6 +641,11 @@ export default function TokenTransferPage() {
                           {userBalance ? formatEther(userBalance) : '0'}
                         </p>
                         <p className="text-sm text-gray-600">{tokenSymbol || 'RWA'}</p>
+                        {totalSupply && userBalance && (
+                          <p className="text-xs text-gray-500 mt-1">
+                            占比: {calculateGovernanceShare(userBalance).toFixed(2)}%
+                          </p>
+                        )}
                       </div>
                     </CardContent>
                   </Card>
@@ -464,6 +772,130 @@ export default function TokenTransferPage() {
                   
                   <Card className="mt-6">
                     <CardHeader>
+                      <CardTitle>治理权益分布</CardTitle>
+                      <CardDescription>各账户代币持有量及治理权益占比</CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                      <div className="space-y-2">
+                        <div className="flex justify-between items-center">
+                          <Label className="text-sm font-medium">治理账户</Label>
+                          <div className="flex space-x-2">
+                            <Button 
+                              size="sm" 
+                              variant="outline"
+                              onClick={getGovernanceBalances}
+                              disabled={isDiscoveringAccounts}
+                            >
+                              刷新余额
+                            </Button>
+                            <Button 
+                              size="sm" 
+                              variant="outline"
+                              onClick={discoverGovernanceAccounts}
+                              disabled={isDiscoveringAccounts}
+                            >
+                              重新发现
+                            </Button>
+                          </div>
+                        </div>
+                        
+                        {discoveryStatus && (
+                          <div className="text-sm text-gray-600 bg-gray-50 p-2 rounded">
+                            <span className="flex items-center">
+                              {isDiscoveringAccounts && (
+                                <span className="animate-spin mr-2">⏳</span>
+                              )}
+                              {discoveryStatus}
+                            </span>
+                          </div>
+                        )}
+                        
+                        <div className="space-y-2">
+                          {accountBalances.map((account, index) => (
+                            <div key={account.address} className="flex items-center justify-between p-3 border rounded-lg">
+                              <div className="flex-1">
+                                <div className="flex items-center space-x-2">
+                                  <Badge variant="secondary" className="text-xs">
+                                    {index + 1}
+                                  </Badge>
+                                  <span className="text-xs font-mono text-gray-600">
+                                    {account.address.slice(0, 6)}...{account.address.slice(-4)}
+                                  </span>
+                                </div>
+                                <div className="flex items-center space-x-4 mt-1">
+                                  <span className="text-sm font-medium text-blue-600">
+                                    {formatEther(account.balance)} {tokenSymbol || 'RWA'}
+                                  </span>
+                                  <span className="text-xs text-gray-500">
+                                    权益: {calculateGovernanceShare(account.balance).toFixed(2)}%
+                                  </span>
+                                </div>
+                              </div>
+                              
+                              {/* 权益占比进度条 */}
+                              <div className="w-24">
+                                <div className="w-full bg-gray-200 rounded-full h-2">
+                                  <div 
+                                    className="bg-blue-600 h-2 rounded-full transition-all duration-300"
+                                    style={{ width: `${Math.min(calculateGovernanceShare(account.balance), 100)}%` }}
+                                  />
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                        
+                        <div className="pt-4 border-t">
+                          <Label htmlFor="newAccount" className="text-sm font-medium">
+                            添加治理账户
+                          </Label>
+                          <div className="flex space-x-2 mt-2">
+                            <Input
+                              id="newAccount"
+                              placeholder="0x..."
+                              value={newAccount}
+                              onChange={(e) => setNewAccount(e.target.value)}
+                              className="flex-1"
+                            />
+                            <Button 
+                              size="sm"
+                              onClick={addAccount}
+                              disabled={!newAccount}
+                            >
+                              添加
+                            </Button>
+                          </div>
+                        </div>
+                        
+                        <div className="pt-4 border-t">
+                          <div className="bg-blue-50 p-3 rounded">
+                            <p className="text-xs text-blue-800">
+                              <strong>智能发现:</strong> 系统自动从区块链中分析转账事件，
+                              发现持有代币的真实账户。点击"重新发现"可更新最新数据。
+                            </p>
+                          </div>
+                        </div>
+                        
+                        <div className="pt-2">
+                          <div className="flex justify-between text-sm text-gray-600">
+                            <span>总持有量:</span>
+                            <span>
+                              {formatEther(accountBalances.reduce((sum, account) => sum + account.balance, 0n))} {tokenSymbol || 'RWA'}
+                            </span>
+                          </div>
+                          <div className="flex justify-between text-sm text-gray-600">
+                            <span>总占比:</span>
+                            <span>
+                              {calculateGovernanceShare(accountBalances.reduce((sum, account) => sum + account.balance, 0n)).toFixed(2)}%
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                  
+                  <Card className="mt-6">
+                    <CardHeader>
                       <CardTitle>使用说明</CardTitle>
                       <CardDescription>如何使用代币转账功能</CardDescription>
                     </CardHeader>
@@ -487,6 +919,13 @@ export default function TokenTransferPage() {
                         <div>
                           <p className="font-medium">治理系统</p>
                           <p className="text-sm text-gray-600">代币持有者可以参与DAO治理投票</p>
+                        </div>
+                      </div>
+                      <div className="flex items-start space-x-2">
+                        <Badge variant="outline" className="mt-1">4</Badge>
+                        <div>
+                          <p className="font-medium">权益分布</p>
+                          <p className="text-sm text-gray-600">查看各账户代币持有量和治理权益占比</p>
                         </div>
                       </div>
                     </CardContent>
