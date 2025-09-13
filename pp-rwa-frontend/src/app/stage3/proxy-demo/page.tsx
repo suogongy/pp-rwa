@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useAccount, useReadContract, useWriteContract, useWaitForTransactionReceipt, useWatchContractEvent } from 'wagmi'
 import { RWAUpgradeableProxy_ADDRESS, RWAUpgradeableProxy_ABI } from '@/lib/wagmi'
 import { Navigation } from '@/components/Navigation'
@@ -24,6 +24,44 @@ interface VersionInfo {
   version: number
   timestamp: number
   upgradedBy: string
+}
+
+// 版本配置映射 - 可以扩展更多版本
+const VERSION_CONFIG = {
+  1: {
+    name: 'V1',
+    description: '基础计数器功能',
+    features: ['next() 方法：计数器加1', 'getCount() 方法：获取当前值'],
+    initSelector: '0x8129fc1c', // CounterV1.initialize()
+    address: '0x2E2Ed0Cfd3AD2f1d34481277b3204d807Ca2F8c2' // 可以从配置文件或环境变量读取
+  },
+  2: {
+    name: 'V2', 
+    description: '增强计数器功能',
+    features: ['next() 方法：计数器加2', 'multi() 方法：倍乘功能', 'getV2Prop() 方法：获取V2属性'],
+    initSelector: '0x5cd8a76b', // CounterV2.initializeV2()
+    address: '0xD8a5a9b31c3C0232e196d518E89Fd8bF83AcAd43' // 可以从配置文件或环境变量读取
+  },
+  // 未来可以轻松添加V3、V4等
+} as const
+
+type VersionNumber = keyof typeof VERSION_CONFIG
+
+// 实用函数：获取版本配置
+function getVersionConfig(version: number) {
+  return VERSION_CONFIG[version as VersionNumber] || null
+}
+
+// 实用函数：获取下一个版本
+function getNextVersion(currentVersion: number): number | null {
+  const versions = Object.keys(VERSION_CONFIG).map(Number).sort((a, b) => a - b)
+  const currentIndex = versions.indexOf(currentVersion)
+  return currentIndex < versions.length - 1 ? versions[currentIndex + 1] : null
+}
+
+// 实用函数：获取最高版本
+function getLatestVersion(): number {
+  return Math.max(...Object.keys(VERSION_CONFIG).map(Number))
 }
 
 export default function CounterDemoPage() {
@@ -53,6 +91,8 @@ export default function CounterDemoPage() {
   })
   const [demoStep, setDemoStep] = useState<number>(1)
   const [isUpgraded, setIsUpgraded] = useState<boolean>(false)
+  const [v2PropInput, setV2PropInput] = useState<string>('')
+  const [isInitializingV2, setIsInitializingV2] = useState<boolean>(false)
 
   const { writeContract, isPending, data: hash } = useWriteContract()
   const { isLoading: isConfirming, isSuccess: isConfirmed } = useWaitForTransactionReceipt({ hash })
@@ -149,8 +189,8 @@ export default function CounterDemoPage() {
     }
   })
 
-  // 获取当前实现地址（备用方法）
-  const { data: directImplementation, refetch: refetchImplementation, error: implementationError } = useReadContract({
+  // 获取当前实现地址（备用方法）- 处理UUPS代理可能没有标准implementation函数的情况
+  const { data: directImplementation, refetch: refetchImplementation } = useReadContract({
     address: proxyAddress as `0x${string}`,
     abi: [
       {
@@ -170,6 +210,7 @@ export default function CounterDemoPage() {
     functionName: 'implementation',
     query: {
       enabled: !!proxyAddress,
+      retry: false, // 不重试，避免不必要的错误日志
     }
   })
 
@@ -200,8 +241,58 @@ export default function CounterDemoPage() {
     ? versionHistory[versionHistory.length - 1].implementation 
     : directImplementation
 
+  // 初始化当前版本
+  const handleInitializeCurrentVersion = useCallback(async () => {
+    if (!proxyAddress) return
+
+    const currentConfig = getVersionConfig(currentVersion)
+    if (!currentConfig) {
+      alert(`V${currentVersion}配置未找到`)
+      return
+    }
+
+    try {
+      // 根据版本选择初始化方法
+      const abi = currentVersion === 1 ? [
+        {
+          "inputs": [],
+          "name": "initialize",
+          "outputs": [],
+          "stateMutability": "nonpayable",
+          "type": "function"
+        }
+      ] : [
+        {
+          "inputs": [],
+          "name": "initializeV2",
+          "outputs": [],
+          "stateMutability": "nonpayable",
+          "type": "function"
+        }
+      ]
+
+      writeContract({
+        address: proxyAddress as `0x${string}`,
+        abi,
+        functionName: currentVersion === 1 ? 'initialize' : 'initializeV2',
+      })
+      
+      console.log(`✅ 初始化${currentConfig.name}交易已发送`)
+      
+      // 设置一个超时来重置初始化状态（防止卡在初始化中）
+      setTimeout(() => {
+        setIsInitializingV2(false)
+        console.log('✅ 重置初始化状态标志')
+      }, 5000)
+    } catch (error) {
+      console.error(`❌ 初始化${currentConfig.name}失败:`, error)
+      alert(`初始化${currentConfig.name}失败`)
+      setIsInitializingV2(false)
+    }
+  }, [proxyAddress, currentVersion, writeContract, setIsInitializingV2, getVersionConfig])
+
   // 读取Counter状态
-  const { data: countData, refetch: refetchCount, error: countError } = useReadContract({
+  const { data: countData, refetch: refetchCount } = useReadContract({
     address: proxyAddress as `0x${string}`,
     abi: [
       {
@@ -267,12 +358,14 @@ export default function CounterDemoPage() {
     ],
     functionName: 'getV2Prop',
     query: {
-      enabled: !!proxyAddress && currentVersion > 1,
+      enabled: !!proxyAddress && isUpgraded,
     }
   })
 
   // 基于版本历史更新Counter状态
   useEffect(() => {
+    let timeoutId: NodeJS.Timeout
+    
     if (versionHistory.length > 0) {
       const latestVersion = versionHistory[versionHistory.length - 1]
       const isUpgraded = currentVersion > 1
@@ -288,6 +381,42 @@ export default function CounterDemoPage() {
       if (isUpgraded) {
         setDemoStep(4)
         console.log('✅ 检测到已升级状态，进入步骤4')
+        
+        // 检查是否需要初始化V2 - 使用防抖机制避免重复检查
+        const checkV2Initialization = () => {
+          console.log('🔍 检查V2初始化状态:')
+          console.log('  v2PropData:', v2PropData)
+          console.log('  currentVersion:', currentVersion)
+          console.log('  isUpgraded:', isUpgraded)
+          console.log('  isInitializingV2:', isInitializingV2)
+          
+          // 防止重复初始化
+          if (isInitializingV2) {
+            console.log('⏳ 正在初始化V2中，跳过检查')
+            return
+          }
+          
+          // 只有在数据已加载且确实需要初始化时才调用
+          if (isUpgraded && v2PropData !== undefined) {
+            if (v2PropData === 0n) {
+              console.log('⚠️ 检测到V2属性为0，准备调用initializeV2()...')
+              setIsInitializingV2(true)
+              handleInitializeCurrentVersion()
+            } else {
+              console.log('✅ V2属性已正确初始化，值为:', v2PropData)
+              // 如果正在初始化，现在可以重置状态
+              if (isInitializingV2) {
+                setIsInitializingV2(false)
+                console.log('✅ 检测到V2已正确初始化，重置初始化状态')
+              }
+            }
+          } else if (isUpgraded && v2PropData === undefined) {
+            console.log('⏳ V2属性数据正在加载，稍后重试...')
+          }
+        }
+        
+        // 延迟检查，确保数据已加载
+        timeoutId = setTimeout(checkV2Initialization, 2000)
       } else {
         if (demoStep === 4) {
           setDemoStep(2)
@@ -295,7 +424,14 @@ export default function CounterDemoPage() {
         console.log('✅ 检测到V1状态')
       }
     }
-  }, [versionHistory, currentVersion, demoStep])
+    
+    // 清理函数
+    return () => {
+      if (timeoutId) {
+        clearTimeout(timeoutId)
+      }
+    }
+  }, [versionHistory, currentVersion, demoStep, v2PropData, isInitializingV2, handleInitializeCurrentVersion])
 
   // 交易确认后刷新状态
   useEffect(() => {
@@ -347,8 +483,8 @@ export default function CounterDemoPage() {
   // 检查权限
   const hasPermission = contractOwner && String(contractOwner).toLowerCase() === address?.toLowerCase()
 
-  // 创建CounterV1代理
-  const handleCreateCounterV1 = async () => {
+  // 创建初始代理（默认V1）
+  const handleCreateProxy = async () => {
     // 如果已有代理，直接进入下一步
     if (proxyAddress) {
       alert('已有代理，请直接测试功能')
@@ -356,101 +492,60 @@ export default function CounterDemoPage() {
     }
 
     try {
-      // 使用第一个已部署的CounterV1地址（从版本历史中获取）
-      const counterV1Address = '0x2E2Ed0Cfd3AD2f1d34481277b3204d807Ca2F8c2'
-      const initData = '0x8129fc1c' // CounterV1.initialize() selector
+      // 使用V1配置创建代理
+      const v1Config = getVersionConfig(1)
+      if (!v1Config) {
+        alert('V1配置未找到')
+        return
+      }
       
       writeContract({
         address: RWAUpgradeableProxy_ADDRESS as `0x${string}`,
         abi: RWAUpgradeableProxy_ABI,
         functionName: 'createProxy',
-        args: [counterV1Address as `0x${string}`, initData],
+        args: [v1Config.address as `0x${string}`, v1Config.initSelector],
       })
       
-      console.log('✅ CounterV1代理创建交易已发送')
+      console.log('✅ 代理创建交易已发送，使用版本:', v1Config.name)
     } catch (error) {
-      console.error('❌ 创建CounterV1代理失败:', error)
-      alert('创建CounterV1代理失败')
+      console.error('❌ 创建代理失败:', error)
+      alert('创建代理失败')
     }
   }
 
-  // 升级到CounterV2
-  const handleUpgradeToV2 = async () => {
+  // 升级到下一个版本
+  const handleUpgradeToNextVersion = async () => {
     if (!proxyAddress) {
       alert('请先创建代理')
       return
     }
 
+    const nextVersion = getNextVersion(currentVersion)
+    if (!nextVersion) {
+      alert(`当前版本V${currentVersion}已是最新版本`)
+      return
+    }
+
+    const nextConfig = getVersionConfig(nextVersion)
+    if (!nextConfig) {
+      alert(`V${nextVersion}配置未找到`)
+      return
+    }
+
     try {
-      // 使用已部署的CounterV2地址
-      const counterV2Address = '0xD8a5a9b31c3C0232e196d518E89Fd8bF83AcAd43'
+      console.log(`🔄 准备从V${currentVersion}升级到V${nextVersion}`)
       
       writeContract({
         address: RWAUpgradeableProxy_ADDRESS as `0x${string}`,
         abi: RWAUpgradeableProxy_ABI,
         functionName: 'upgrade',
-        args: [proxyAddress as `0x${string}`, counterV2Address as `0x${string}`],
+        args: [proxyAddress as `0x${string}`, nextConfig.address as `0x${string}`],
       })
       
-      console.log('✅ 升级到CounterV2交易已发送')
+      console.log(`✅ 升级到${nextConfig.name}交易已发送`)
     } catch (error) {
-      console.error('❌ 升级到CounterV2失败:', error)
-      alert('升级到CounterV2失败')
-    }
-  }
-
-  // 初始化CounterV2
-  const handleInitializeV2 = async () => {
-    if (!proxyAddress) return
-
-    try {
-      // 这里需要通过代理调用initializeV2
-      const initData = '0x5cd8a76b' // CounterV2.initializeV2() selector
-      
-      writeContract({
-        address: proxyAddress as `0x${string}`,
-        abi: [
-          {
-            "inputs": [],
-            "name": "initializeV2",
-            "outputs": [],
-            "stateMutability": "nonpayable",
-            "type": "function"
-          }
-        ],
-        functionName: 'initializeV2',
-      })
-      
-      console.log('✅ 初始化CounterV2交易已发送')
-    } catch (error) {
-      console.error('❌ 初始化CounterV2失败:', error)
-      alert('初始化CounterV2失败')
-    }
-  }
-
-  // 初始化CounterV1
-  const handleInitializeV1 = async () => {
-    if (!proxyAddress) return
-
-    try {
-      writeContract({
-        address: proxyAddress as `0x${string}`,
-        abi: [
-          {
-            "inputs": [],
-            "name": "initialize",
-            "outputs": [],
-            "stateMutability": "nonpayable",
-            "type": "function"
-          }
-        ],
-        functionName: 'initialize',
-      })
-      
-      console.log('✅ 初始化CounterV1交易已发送')
-    } catch (error) {
-      console.error('❌ 初始化CounterV1失败:', error)
-      alert('初始化CounterV1失败')
+      console.error(`❌ 升级到${nextConfig.name}失败:`, error)
+      alert(`升级到${nextConfig.name}失败`)
     }
   }
 
@@ -501,7 +596,7 @@ export default function CounterDemoPage() {
       })
       
       console.log('✅ Counter.next() 调用已发送')
-    } catch (error: any) {
+    } catch (error) {
       console.error('❌ 调用Counter.next()失败:', error)
       console.error('  错误类型:', error.name)
       console.error('  错误代码:', error.code)
@@ -516,6 +611,66 @@ export default function CounterDemoPage() {
         errorMessage = '用户拒绝了交易'
       }
       alert(errorMessage)
+    }
+  }
+
+  // 设置V2属性值（通过重置为基础值再乘以目标值）
+  const handleSetV2Prop = async (value: number) => {
+    if (!proxyAddress || value <= 0) return
+
+    try {
+      // 首先重置为1，然后乘以目标值
+      // 因为multi方法是乘法，所以要得到目标值，需要先重置状态
+      // 这是一个变通方法，因为合约没有直接的setter方法
+      
+      // 方法1：直接乘以目标值（如果当前值是1）
+      const currentValue = counterState.v2Prop || 1
+      if (currentValue === 1) {
+        writeContract({
+          address: proxyAddress as `0x${string}`,
+          abi: [
+            {
+              "inputs": [
+                {"internalType": "uint256", "name": "multiplier", "type": "uint256"}
+              ],
+              "name": "multi",
+              "outputs": [],
+              "stateMutability": "nonpayable",
+              "type": "function"
+            }
+          ],
+          functionName: 'multi',
+          args: [BigInt(value)],
+        })
+        console.log(`✅ 设置V2属性值为 ${value} (当前值为1，直接乘以${value})`)
+      } else {
+        // 方法2：计算乘数
+        const multiplier = Math.floor(value / currentValue)
+        if (multiplier > 0) {
+          writeContract({
+            address: proxyAddress as `0x${string}`,
+            abi: [
+              {
+                "inputs": [
+                  {"internalType": "uint256", "name": "multiplier", "type": "uint256"}
+                ],
+                "name": "multi",
+                "outputs": [],
+                "stateMutability": "nonpayable",
+                "type": "function"
+              }
+            ],
+            functionName: 'multi',
+            args: [BigInt(multiplier)],
+          })
+          console.log(`✅ 设置V2属性值调用已发送: 当前值 ${currentValue} × ${multiplier} ≈ ${value}`)
+        } else {
+          alert('目标值必须大于等于当前值')
+        }
+      }
+    } catch (error) {
+      console.error('❌ 设置V2属性值失败:', error)
+      alert('设置V2属性值失败')
     }
   }
 
@@ -552,36 +707,72 @@ export default function CounterDemoPage() {
     }
   }
 
-  // 调试状态读取
+  // 调试状态读取 - 简化日志输出
   useEffect(() => {
     if (proxyAddress) {
-      console.log('🔍 状态调试:')
-      console.log('  代理地址:', proxyAddress)
-      console.log('  当前版本:', currentVersion)
-      console.log('  版本历史长度:', versionHistory.length)
-      console.log('  当前实现:', currentImplementation)
-      console.log('  直接实现:', directImplementation)
-      console.log('  实现错误:', implementationError)
-      console.log('  计数器数据:', countData)
-      console.log('  V2属性:', v2PropData)
+      // 只在关键状态变化时输出日志，避免过多日志
+      if (v2PropData !== undefined || currentImplementation !== undefined) {
+        console.log('🔍 关键状态更新:')
+        console.log('  当前版本:', currentVersion)
+        console.log('  当前实现:', currentImplementation)
+        console.log('  计数器数据:', countData)
+        console.log('  V2属性:', v2PropData)
+      }
     }
-  }, [proxyAddress, currentVersion, versionHistory, currentImplementation, directImplementation, implementationError, countData, v2PropData])
+  }, [proxyAddress, currentVersion, currentImplementation, countData, v2PropData])
 
   // 更新Counter状态
   useEffect(() => {
-    if (countData !== undefined) {
+    // 只在数据实际变化时更新状态，减少不必要的日志
+    const shouldUpdateCount = countData !== undefined && Number(countData) !== counterState.count
+    const shouldUpdateV2Prop = isUpgraded && v2PropData !== undefined && Number(v2PropData) !== counterState.v2Prop
+    
+    if (shouldUpdateCount || shouldUpdateV2Prop) {
+      console.log('🔄 更新Counter状态:')
+      console.log('  countData:', countData)
+      console.log('  v2PropData:', v2PropData)
+      console.log('  isUpgraded:', isUpgraded)
+    }
+    
+    if (shouldUpdateCount) {
       setCounterState(prev => ({
         ...prev,
         count: Number(countData)
       }))
+      console.log('✅ 更新count值为:', Number(countData))
     }
-    if (v2PropData !== undefined) {
-      setCounterState(prev => ({
-        ...prev,
-        v2Prop: Number(v2PropData)
-      }))
+    
+    // 如果已升级，尝试读取V2属性值
+    if (isUpgraded) {
+      if (v2PropData !== undefined) {
+        if (shouldUpdateV2Prop) {
+          setCounterState(prev => ({
+            ...prev,
+            v2Prop: Number(v2PropData)
+          }))
+          console.log('✅ 更新v2Prop值为:', Number(v2PropData))
+        }
+      } else {
+        // 如果V2属性数据为undefined，设置为默认值1
+        if (counterState.v2Prop !== 1) {
+          setCounterState(prev => ({
+            ...prev,
+            v2Prop: 1
+          }))
+          console.log('⚠️ V2属性数据为undefined，设置为默认值1')
+        }
+      }
+    } else {
+      // 如果未升级，设置V2属性为0
+      if (counterState.v2Prop !== 0) {
+        setCounterState(prev => ({
+          ...prev,
+          v2Prop: 0
+        }))
+        console.log('⚠️ 未升级状态，设置v2Prop为0')
+      }
     }
-  }, [countData, v2PropData])
+  }, [countData, v2PropData, isUpgraded, counterState.count, counterState.v2Prop])
 
   // 交易确认后刷新状态
   useEffect(() => {
@@ -591,10 +782,23 @@ export default function CounterDemoPage() {
         refetchCount()
         refetchV2Prop()
         refetchImplementation()
+        refetchVersionHistory()
+        refetchCurrentVersion()
+        
+        // 如果是初始化V2的交易确认，重置初始化状态
+        if (isInitializingV2) {
+          setTimeout(() => {
+            setIsInitializingV2(false)
+            console.log('✅ 初始化交易确认，重置初始化状态')
+          }, 1000)
+        }
         
         // 额外延迟确保区块链状态更新
         setTimeout(() => {
           refetchImplementation()
+          refetchV2Prop()
+          refetchVersionHistory()
+          refetchCurrentVersion()
         }, 1000)
         
         // 更新演示步骤和状态
@@ -609,11 +813,33 @@ export default function CounterDemoPage() {
           // 升级交易完成后，等待实现地址更新
           setTimeout(() => {
             setDemoStep(4)
+            // 升级后检查是否需要初始化V2
+            setTimeout(() => {
+              if (isInitializingV2) {
+                console.log('⏳ 正在初始化V2中，跳过升级后检查')
+                return
+              }
+              
+              if (isUpgraded && v2PropData === 0n) {
+                console.log('⚠️ 升级后检测到V2属性为0，准备调用initializeV2()...')
+                setIsInitializingV2(true)
+                handleInitializeCurrentVersion()
+              } else if (isUpgraded && v2PropData === undefined) {
+                console.log('⏳ 升级后V2属性数据正在加载，等待...')
+                setTimeout(() => {
+                  if (v2PropData === 0n && !isInitializingV2) {
+                    console.log('⚠️ 升级后确认V2属性为0，准备调用initializeV2()...')
+                    setIsInitializingV2(true)
+                    handleInitializeCurrentVersion()
+                  }
+                }, 1000)
+              }
+            }, 2000)
           }, 1000)
         }
       }, 2000)
     }
-  }, [isConfirmed, hash, demoStep, proxyAddress, refetchCount, refetchV2Prop, refetchImplementation])
+  }, [isConfirmed, hash, demoStep, proxyAddress, refetchCount, refetchV2Prop, refetchImplementation, refetchVersionHistory, refetchCurrentVersion, handleInitializeCurrentVersion, isInitializingV2, isUpgraded, v2PropData])
 
   if (!mounted) {
     return (
@@ -683,6 +909,17 @@ export default function CounterDemoPage() {
                           className="w-full"
                         >
                           🔄 刷新状态
+                        </Button>
+                        <Button 
+                          onClick={() => {
+                            console.log('🎯 专门刷新V2属性...')
+                            refetchV2Prop()
+                          }}
+                          variant="outline"
+                          size="sm"
+                          className="w-full"
+                        >
+                          🎯 刷新V2属性
                         </Button>
                         <div className={`p-3 rounded-lg ${demoStep >= 1 ? 'bg-green-100 border-green-300' : 'bg-gray-100'}`}>
                           <div className="flex items-center justify-between">
@@ -814,6 +1051,12 @@ export default function CounterDemoPage() {
                         <div>当前实现: {currentImplementation ? `${String(currentImplementation).slice(0, 10)}...` : '检测中'}</div>
                         <div>直接实现: {directImplementation ? `${String(directImplementation).slice(0, 10)}...` : '检测中'}</div>
                         <div>演示步骤: {demoStep}</div>
+                        <div>已升级状态: {isUpgraded ? '是' : '否'}</div>
+                        <div>原始V2数据: {v2PropData !== undefined ? String(v2PropData) : 'undefined'}</div>
+                        <div>显示V2值: {counterState.v2Prop}</div>
+                        <div>V2读取启用: {!!proxyAddress && isUpgraded ? '是' : '否'}</div>
+                        <div>正在初始化V2: {isInitializingV2 ? '是' : '否'}</div>
+                        <div>代理地址: {proxyAddress ? `${proxyAddress.slice(0, 8)}...` : '未设置'}</div>
                       </div>
                     </CardContent>
                   </Card>
@@ -838,7 +1081,7 @@ export default function CounterDemoPage() {
                           </p>
                           <ul className="text-sm text-blue-800 list-disc list-inside mt-2 space-y-1">
                             <li>系统会自动检测已有的Counter代理并填充地址</li>
-                            <li>如果Counter未初始化，count会显示为0，需要点击"初始化CounterV1"</li>
+                            <li>如果Counter未初始化，count会显示为0，需要点击&ldquo;初始化CounterV1&rdquo;</li>
                             <li>如果已在Stage3主页面创建过代理，可以直接使用</li>
                             <li>代理地址: {proxyAddress ? `${proxyAddress.slice(0, 10)}...${proxyAddress.slice(-6)}` : '等待检测'}</li>
                           </ul>
@@ -863,10 +1106,10 @@ export default function CounterDemoPage() {
                           </div>
                           <div className="flex gap-2">
                             <Button 
-                              onClick={handleCreateCounterV1}
+                              onClick={handleCreateProxy}
                               disabled={proxyAddress || !hasPermission || isPending || isConfirming}
                             >
-                              {isPending ? '创建中...' : isConfirming ? '确认中...' : '创建CounterV1代理'}
+                              {isPending ? '创建中...' : isConfirming ? '确认中...' : '创建代理(V1)'}
                             </Button>
                             {proxyAddress && (
                               <Badge variant="default">✅ 已有代理</Badge>
@@ -884,7 +1127,7 @@ export default function CounterDemoPage() {
                             </ul>
                             {counterState.count === 0 && (
                               <p className="text-orange-600 mt-2">
-                                ⚠️ 如果next()方法不工作，请点击"初始化CounterV1"按钮
+                                ⚠️ 如果next()方法不工作，请点击&ldquo;初始化CounterV1&rdquo;按钮
                               </p>
                             )}
                           </div>
@@ -929,12 +1172,12 @@ export default function CounterDemoPage() {
                               </Button>
                               {counterState.count === 0 && (
                                 <Button 
-                                  onClick={handleInitializeV1}
+                                  onClick={handleInitializeCurrentVersion}
                                   disabled={isPending || isConfirming}
                                   variant="outline"
                                   className="w-full"
                                 >
-                                  初始化CounterV1
+                                  初始化{getVersionConfig(currentVersion)?.name || '当前版本'}
                                 </Button>
                               )}
                             </div>
@@ -990,29 +1233,28 @@ export default function CounterDemoPage() {
                             </div>
                             <div className="flex gap-2">
                               <Button 
-                                onClick={handleUpgradeToV2}
-                                disabled={isUpgraded || !hasPermission || isPending || isConfirming}
+                                onClick={handleUpgradeToNextVersion}
+                                disabled={!hasPermission || isPending || isConfirming}
                                 variant="outline"
                               >
-                                {isPending ? '升级中...' : isConfirming ? '确认中...' : '升级到CounterV2'}
+                                {isPending ? '升级中...' : isConfirming ? '确认中...' : `升级到V${getNextVersion(currentVersion) || '最新版本'}`}
                               </Button>
-                              {isUpgraded && (
+                              {currentVersion > 1 && (
                                 <Button 
-                                  onClick={handleInitializeV2}
+                                  onClick={handleInitializeCurrentVersion}
                                   disabled={isPending || isConfirming}
                                   variant="default"
                                 >
-                                  初始化V2状态
+                                  初始化V{currentVersion}状态
                                 </Button>
                               )}
                             </div>
                             <div className="text-sm text-gray-600 bg-orange-50 p-3 rounded-lg">
-                              <p><strong>CounterV2新增功能:</strong></p>
+                              <p><strong>V{getNextVersion(currentVersion) || '最新版本'}功能:</strong></p>
                               <ul className="list-disc list-inside mt-2 space-y-1">
-                                <li>next() 方法：计数器加2（升级后）</li>
-                                <li>multi() 方法：v2Prop属性倍乘</li>
-                                <li>getV2Prop() 方法：获取v2Prop值</li>
-                                <li>新增v2Prop状态变量</li>
+                                {getNextVersion(currentVersion) && getVersionConfig(getNextVersion(currentVersion))?.features.map((feature, index) => (
+                                  <li key={index}>{feature}</li>
+                                ))}
                               </ul>
                             </div>
                           </div>
@@ -1020,12 +1262,12 @@ export default function CounterDemoPage() {
                       </Card>
                     )}
 
-                    {/* 步骤4：测试V2功能 */}
-                    {isUpgraded && (
+                    {/* 步骤4：测试当前版本功能 */}
+                    {currentVersion > 1 && (
                       <Card>
                         <CardHeader>
                           <CardTitle className="flex items-center gap-2">
-                            ✨ 步骤 4: 测试CounterV2功能
+                            ✨ 步骤 4: 测试{getVersionConfig(currentVersion)?.name}功能
                           </CardTitle>
                           <CardDescription>
                             验证升级后的新功能和状态保持
@@ -1039,17 +1281,35 @@ export default function CounterDemoPage() {
                                 <div className="text-sm text-blue-600">计数器值</div>
                               </div>
                               <div className="p-4 bg-green-50 rounded-lg text-center">
-                                <div className="text-lg font-medium text-green-600">V2</div>
+                                <div className="text-lg font-medium text-green-600">{getVersionConfig(currentVersion)?.name}</div>
                                 <div className="text-sm text-green-600">当前版本</div>
                               </div>
                               <div className="p-4 bg-purple-50 rounded-lg text-center">
-                                <div className="text-lg font-medium text-purple-600">+2</div>
+                                <div className="text-lg font-medium text-purple-600">
+                                  {currentVersion === 1 ? '+1' : currentVersion === 2 ? '+2' : `+${currentVersion}`}
+                                </div>
                                 <div className="text-sm text-purple-600">每次增加</div>
                               </div>
-                              <div className="p-4 bg-orange-50 rounded-lg text-center">
-                                <div className="text-lg font-medium text-orange-600">{counterState.v2Prop}</div>
-                                <div className="text-sm text-orange-600">V2属性值</div>
-                              </div>
+                              {currentVersion > 1 && (
+                                <div className="p-4 bg-orange-50 rounded-lg text-center">
+                                  <div className="text-lg font-medium text-orange-600">{counterState.v2Prop}</div>
+                                  <div className="text-sm text-orange-600">V{currentVersion}属性值</div>
+                                  {counterState.v2Prop === 0 && (
+                                    <div className="mt-2">
+                                      <Badge variant="destructive" className="text-xs">
+                                        ⚠️ 未初始化
+                                      </Badge>
+                                    </div>
+                                  )}
+                                  {counterState.v2Prop > 0 && (
+                                    <div className="mt-2">
+                                      <Badge variant="default" className="text-xs">
+                                        ✓ 已初始化
+                                      </Badge>
+                                    </div>
+                                  )}
+                                </div>
+                              )}
                             </div>
                             
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -1057,27 +1317,133 @@ export default function CounterDemoPage() {
                                 onClick={handleCallNext}
                                 disabled={isPending || isConfirming}
                               >
-                                调用 next() (现在加2)
+                                调用 next() (现在加{currentVersion === 1 ? '1' : currentVersion === 2 ? '2' : currentVersion})
                               </Button>
-                              <div className="space-y-2">
-                                <Button 
-                                  onClick={() => handleCallMulti(2)}
-                                  disabled={isPending || isConfirming}
-                                  variant="outline"
-                                  className="w-full"
-                                >
-                                  multi(2) - v2Prop × 2
-                                </Button>
-                                <Button 
-                                  onClick={() => handleCallMulti(3)}
-                                  disabled={isPending || isConfirming}
-                                  variant="outline"
-                                  className="w-full"
-                                >
-                                  multi(3) - v2Prop × 3
-                                </Button>
-                              </div>
+                              {currentVersion > 1 && (
+                                <div className="space-y-2">
+                                  <Button 
+                                    onClick={() => handleCallMulti(2)}
+                                    disabled={isPending || isConfirming}
+                                    variant="outline"
+                                    className="w-full"
+                                  >
+                                    multi(2) - v{currentVersion}Prop × 2
+                                  </Button>
+                                  <Button 
+                                    onClick={() => handleCallMulti(3)}
+                                    disabled={isPending || isConfirming}
+                                    variant="outline"
+                                    className="w-full"
+                                  >
+                                    multi(3) - v{currentVersion}Prop × 3
+                                  </Button>
+                                  <Button 
+                                    onClick={() => {
+                                      // 强制设置V2属性为1（如果当前值为0）
+                                      if (counterState.v2Prop === 0) {
+                                        handleSetV2Prop(1)
+                                      } else {
+                                        alert('当前V2属性值不为0，无需强制初始化')
+                                      }
+                                    }}
+                                    disabled={isPending || isConfirming}
+                                    variant="default"
+                                    className="w-full"
+                                  >
+                                    🔄 强制初始化V2为1
+                                  </Button>
+                                </div>
+                              )}
                             </div>
+                            
+                            {currentVersion > 1 && (
+                              <div className="mt-6 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+                                <h4 className="font-medium text-yellow-800 mb-3">
+                                  🎯 V2属性管理
+                                </h4>
+                                <p className="text-sm text-yellow-700 mb-3">
+                                  V2属性默认值为1，您可以初始化或设置新的值来测试multi方法的效果
+                                </p>
+                                {counterState.v2Prop === 0 && (
+                                  <div className="mb-3 p-2 bg-red-50 border border-red-200 rounded">
+                                    <p className="text-sm text-red-700">
+                                      ⚠️ V2属性未初始化，请先点击&ldquo;初始化V2属性&rdquo;按钮
+                                    </p>
+                                    <Button 
+                                      onClick={() => {
+                                        setIsInitializingV2(true)
+                                        handleInitializeCurrentVersion()
+                                      }}
+                                      disabled={isPending || isConfirming || isInitializingV2}
+                                      variant="destructive"
+                                      size="sm"
+                                      className="mt-2 w-full"
+                                    >
+                                      {isInitializingV2 ? '🔄 初始化中...' : '🔄 初始化V2属性'}
+                                    </Button>
+                                  </div>
+                                )}
+                                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                                  <div>
+                                    <Label htmlFor="v2-prop-input" className="text-sm font-medium">
+                                      目标值
+                                    </Label>
+                                    <Input
+                                      id="v2-prop-input"
+                                      type="number"
+                                      min="1"
+                                      value={v2PropInput}
+                                      onChange={(e) => setV2PropInput(e.target.value)}
+                                      placeholder="输入目标值"
+                                      className="mt-1"
+                                    />
+                                  </div>
+                                  <div className="flex items-end">
+                                    <Button 
+                                      onClick={() => {
+                                        const value = parseInt(v2PropInput)
+                                        if (value > 0) {
+                                          handleSetV2Prop(value)
+                                        } else {
+                                          alert('请输入大于0的数字')
+                                        }
+                                      }}
+                                      disabled={!v2PropInput || isPending || isConfirming}
+                                      variant="outline"
+                                      className="w-full"
+                                    >
+                                      设置V2属性
+                                    </Button>
+                                  </div>
+                                  <div className="flex items-end">
+                                    <Button 
+                                      onClick={() => {
+                                        setV2PropInput('10')
+                                        handleSetV2Prop(10)
+                                      }}
+                                      disabled={isPending || isConfirming}
+                                      variant="default"
+                                      className="w-full"
+                                    >
+                                      快速设为10
+                                    </Button>
+                                  </div>
+                                </div>
+                                <div className="mt-3 text-xs text-yellow-600">
+                                  <p>💡 提示：multi方法会将当前V2属性值乘以指定倍数，所以建议先设置一个基础值再测试倍乘效果</p>
+                                  <p>当前V2属性值: {counterState.v2Prop} | 目标值: {v2PropInput || '未设置'}</p>
+                                  <p>原始V2数据: {v2PropData !== undefined ? String(v2PropData) : 'undefined'} | 已升级: {isUpgraded ? '是' : '否'}</p>
+                                  <Button 
+                                    onClick={() => refetchV2Prop()}
+                                    variant="outline"
+                                    size="sm"
+                                    className="mt-2 w-full"
+                                  >
+                                    🔄 手动刷新V2数据
+                                  </Button>
+                                </div>
+                              </div>
+                            )}
                             
                             {demoStep >= 4 && (
                               <div className="text-center p-4 bg-green-50 rounded-lg border-green-300">
@@ -1086,8 +1452,8 @@ export default function CounterDemoPage() {
                                 </Badge>
                                 <p className="text-sm text-gray-600 mt-2">
                                   状态保持：{counterState.count} | 
-                                  V2功能：✓ | 
-                                  新属性：{counterState.v2Prop}
+                                  {getVersionConfig(currentVersion)?.name}功能：✓ | 
+                                  {currentVersion > 1 && ` 新属性：${counterState.v2Prop}`}
                                 </p>
                               </div>
                             )}
