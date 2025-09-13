@@ -33,6 +33,8 @@ export function GovernanceManagement({ address }: { address: string }) {
   const [newProposalCalldata, setNewProposalCalldata] = useState('')
   const [voteReason, setVoteReason] = useState('')
   const [delegateAddress, setDelegateAddress] = useState('')
+  const [isLoadingProposals, setIsLoadingProposals] = useState(false)
+  const [proposalError, setProposalError] = useState<string | null>(null)
 
   const { writeContract, isPending, data: hash } = useWriteContract()
   const { isLoading: isConfirming, isSuccess: isConfirmed } = useWaitForTransactionReceipt({ hash })
@@ -42,6 +44,13 @@ export function GovernanceManagement({ address }: { address: string }) {
     address: RWAGovernor_ADDRESS,
     abi: RWAGovernor_ABI,
     functionName: 'getProposalCount',
+  })
+  
+  // 读取所有提案ID列表
+  const { data: allProposalIds } = useReadContract({
+    address: RWAGovernor_ADDRESS,
+    abi: RWAGovernor_ABI,
+    functionName: 'getAllProposalIds',
   })
 
   // 获取治理代币地址
@@ -106,39 +115,136 @@ export function GovernanceManagement({ address }: { address: string }) {
     functionName: 'quorumNumerator',
   })
 
-  // 获取提案详情
-  const getProposalDetails = async (proposalId: bigint) => {
+  // 获取提案详情 - 直接通过合约查询
+  const getProposalDetailsFromContract = useReadContract({
+    address: RWAGovernor_ADDRESS,
+    abi: RWAGovernor_ABI,
+    functionName: 'getProposalDetails',
+  })
+  
+  // 获取提案状态字符串
+  const getProposalStateString = useReadContract({
+    address: RWAGovernor_ADDRESS,
+    abi: RWAGovernor_ABI,
+    functionName: 'getProposalState',
+  })
+  
+  // 获取提案详情的辅助函数 - 优化版本
+  const getProposalDetails = async (proposalId: bigint): Promise<Proposal | null> => {
     try {
-      const result = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/governance/proposal/${proposalId}`)
-      if (!result.ok) return null
-      return await result.json()
+      // 直接通过wagmi读取合约获取提案详情
+      const result = await getProposalDetailsFromContract.refetch({
+        args: [proposalId],
+      })
+      
+      if (!result.data) {
+        console.warn(`提案 ${proposalId.toString()} 无详情数据`)
+        return null
+      }
+      
+      // 获取提案状态字符串
+      const stateResult = await getProposalStateString.refetch({
+        args: [proposalId],
+      })
+      
+      const [proposer, targets, values, calldatas, description, voteStart, voteEnd, executed, canceled, forVotes, againstVotes, abstainVotes] = result.data
+      
+      // 验证数据完整性
+      if (!proposer || !voteStart || !voteEnd) {
+        console.warn(`提案 ${proposalId.toString()} 数据不完整`, {
+          proposer, voteStart, voteEnd
+        })
+        return null
+      }
+      
+      return {
+        id: proposalId,
+        proposer,
+        description: description || '无描述',
+        voteStart,
+        voteEnd,
+        executed,
+        canceled,
+        forVotes,
+        againstVotes,
+        abstainVotes,
+        state: stateResult.data || 'Unknown',
+        targets,
+        values,
+        calldatas
+      } as Proposal
     } catch (error) {
-      console.error('获取提案详情失败:', error)
+      console.error(`获取提案 ${proposalId.toString()} 详情失败:`, error)
       return null
     }
   }
 
-  // 刷新提案列表
+  // 刷新提案列表 - 优化版本
   const refreshProposals = async () => {
-    if (!proposalCount) return
+    setIsLoadingProposals(true)
+    setProposalError(null)
     
-    const proposalList: Proposal[] = []
-    const count = Number(proposalCount)
-    
-    for (let i = 1; i <= count && i <= 10; i++) { // 限制最多显示10个提案
-      const details = await getProposalDetails(BigInt(i))
-      if (details) {
-        proposalList.push(details as Proposal)
+    try {
+      if (!allProposalIds || !Array.isArray(allProposalIds)) {
+        console.log('暂无提案ID列表')
+        setProposals([])
+        return
       }
+      
+      console.log(`开始刷新 ${allProposalIds.length} 个提案的详情`)
+      
+      const proposalList: Proposal[] = []
+      const ids = allProposalIds.slice() // 复制数组
+      
+      // 限制显示最新的10个提案（从最新到最旧）
+      const latestIds = ids.reverse().slice(0, 10)
+      
+      // 并行获取提案详情以提高性能
+      const detailPromises = latestIds.map(async (proposalId) => {
+        try {
+          const details = await getProposalDetails(proposalId)
+          return details
+        } catch (error) {
+          console.error(`获取提案 ${proposalId.toString()} 详情时出错:`, error)
+          return null
+        }
+      })
+      
+      const detailsResults = await Promise.allSettled(detailPromises)
+      
+      for (const result of detailsResults) {
+        if (result.status === 'fulfilled' && result.value) {
+          proposalList.push(result.value)
+        }
+      }
+      
+      console.log(`成功获取 ${proposalList.length} 个提案详情`)
+      setProposals(proposalList)
+      
+    } catch (error) {
+      console.error('刷新提案列表失败:', error)
+      setProposalError('获取提案列表失败，请稍后重试')
+    } finally {
+      setIsLoadingProposals(false)
     }
-    
-    setProposals(proposalList)
   }
 
-  // 监听提案数量变化
+  // 监听提案ID列表变化
   useEffect(() => {
-    refreshProposals()
-  }, [proposalCount])
+    console.log('提案ID列表更新:', allProposalIds)
+    if (allProposalIds && Array.isArray(allProposalIds)) {
+      refreshProposals()
+    }
+  }, [allProposalIds])
+  
+  // 添加定时刷新，确保提案数据是最新的
+  useEffect(() => {
+    const interval = setInterval(() => {
+      refreshProposals()
+    }, 30000) // 每30秒刷新一次
+    
+    return () => clearInterval(interval)
+  }, [allProposalIds])
 
   // 创建提案
   const handleCreateProposal = async () => {
@@ -226,7 +332,7 @@ export function GovernanceManagement({ address }: { address: string }) {
     }
   }
 
-  // 执行提案
+  // 执行提案 - 优化版本
   const handleExecute = async (proposalId: bigint) => {
     console.log('开始执行治理提案:')
     console.log('  提案ID:', proposalId.toString())
@@ -238,30 +344,46 @@ export function GovernanceManagement({ address }: { address: string }) {
       const proposal = proposals.find(p => p.id === proposalId)
       if (!proposal) {
         console.error('找不到提案详情')
+        // 重新获取提案详情
+        await refreshProposals()
+        const refreshedProposal = proposals.find(p => p.id === proposalId)
+        if (!refreshedProposal) {
+          setProposalError('找不到提案详情，请刷新后重试')
+          return
+        }
+      }
+
+      // 使用提案的原始参数
+      const executeProposal = proposals.find(p => p.id === proposalId)
+      if (!executeProposal) {
+        setProposalError('提案数据不完整')
         return
       }
 
-      const descriptionHash = await useReadContract({
+      // 获取提案哈希
+      const hashProposal = useReadContract({
         address: RWAGovernor_ADDRESS,
         abi: RWAGovernor_ABI,
         functionName: 'hashProposal',
         args: [
-          [newProposalTarget as `0x${string}`],
-          [newProposalValue ? parseEther(newProposalValue) : 0n],
-          [newProposalCalldata || '0x'],
-          proposal.description
+          executeProposal.targets || [newProposalTarget as `0x${string}`],
+          executeProposal.values || [newProposalValue ? parseEther(newProposalValue) : 0n],
+          executeProposal.calldatas || [newProposalCalldata || '0x'],
+          executeProposal.description
         ],
       })
+
+      const descriptionHash = await hashProposal.refetch()
 
       writeContract({
         address: RWAGovernor_ADDRESS,
         abi: RWAGovernor_ABI,
         functionName: 'execute',
         args: [
-          [newProposalTarget as `0x${string}`],
-          [newProposalValue ? parseEther(newProposalValue) : 0n],
-          [newProposalCalldata || '0x'],
-          descriptionHash as bytes32
+          executeProposal.targets || [newProposalTarget as `0x${string}`],
+          executeProposal.values || [newProposalValue ? parseEther(newProposalValue) : 0n],
+          executeProposal.calldatas || [newProposalCalldata || '0x'],
+          descriptionHash.data as bytes32
         ],
       })
       
@@ -269,16 +391,11 @@ export function GovernanceManagement({ address }: { address: string }) {
       
     } catch (error) {
       console.error('执行提案失败:', error)
-      console.error('错误详情:', {
-        message: error instanceof Error ? error.message : '未知错误',
-        stack: error instanceof Error ? error.stack : '无堆栈信息',
-        code: (error as any)?.code,
-        data: (error as any)?.data
-      })
+      setProposalError('执行提案失败，请检查权限和提案状态')
     }
   }
 
-  // 取消提案
+  // 取消提案 - 优化版本
   const handleCancel = async (proposalId: bigint) => {
     console.log('开始取消提案:')
     console.log('  提案ID:', proposalId.toString())
@@ -288,30 +405,46 @@ export function GovernanceManagement({ address }: { address: string }) {
       const proposal = proposals.find(p => p.id === proposalId)
       if (!proposal) {
         console.error('找不到提案详情')
+        // 重新获取提案详情
+        await refreshProposals()
+        const refreshedProposal = proposals.find(p => p.id === proposalId)
+        if (!refreshedProposal) {
+          setProposalError('找不到提案详情，请刷新后重试')
+          return
+        }
+      }
+
+      // 使用提案的原始参数
+      const cancelProposal = proposals.find(p => p.id === proposalId)
+      if (!cancelProposal) {
+        setProposalError('提案数据不完整')
         return
       }
 
-      const descriptionHash = await useReadContract({
+      // 获取提案哈希
+      const hashProposal = useReadContract({
         address: RWAGovernor_ADDRESS,
         abi: RWAGovernor_ABI,
         functionName: 'hashProposal',
         args: [
-          [newProposalTarget as `0x${string}`],
-          [newProposalValue ? parseEther(newProposalValue) : 0n],
-          [newProposalCalldata || '0x'],
-          proposal.description
+          cancelProposal.targets || [newProposalTarget as `0x${string}`],
+          cancelProposal.values || [newProposalValue ? parseEther(newProposalValue) : 0n],
+          cancelProposal.calldatas || [newProposalCalldata || '0x'],
+          cancelProposal.description
         ],
       })
+
+      const descriptionHash = await hashProposal.refetch()
 
       writeContract({
         address: RWAGovernor_ADDRESS,
         abi: RWAGovernor_ABI,
         functionName: 'cancel',
         args: [
-          [newProposalTarget as `0x${string}`],
-          [newProposalValue ? parseEther(newProposalValue) : 0n],
-          [newProposalCalldata || '0x'],
-          descriptionHash as bytes32
+          cancelProposal.targets || [newProposalTarget as `0x${string}`],
+          cancelProposal.values || [newProposalValue ? parseEther(newProposalValue) : 0n],
+          cancelProposal.calldatas || [newProposalCalldata || '0x'],
+          descriptionHash.data as bytes32
         ],
       })
       
@@ -319,6 +452,7 @@ export function GovernanceManagement({ address }: { address: string }) {
       
     } catch (error) {
       console.error('取消提案失败:', error)
+      setProposalError('取消提案失败，请检查权限和提案状态')
     }
   }
 
@@ -340,10 +474,11 @@ export function GovernanceManagement({ address }: { address: string }) {
   useEffect(() => {
     console.log('治理合约状态更新:')
     console.log('  提案数量:', proposalCount?.toString())
+    console.log('  提案ID列表:', allProposalIds)
     console.log('  当前用户地址:', address)
     console.log('  投票权重:', tokenBalance?.toString())
     console.log('  合约地址:', RWAGovernor_ADDRESS)
-  }, [proposalCount, address, tokenBalance])
+  }, [proposalCount, allProposalIds, address, tokenBalance])
 
   // 添加交易状态日志
   useEffect(() => {
@@ -621,12 +756,40 @@ export function GovernanceManagement({ address }: { address: string }) {
 
       <Card>
         <CardHeader>
-          <CardTitle>提案列表</CardTitle>
-          <CardDescription>查看和参与提案投票</CardDescription>
+          <div className="flex justify-between items-center">
+            <div>
+              <CardTitle>提案列表</CardTitle>
+              <CardDescription>查看和参与提案投票</CardDescription>
+            </div>
+            <Button 
+              onClick={refreshProposals}
+              variant="outline"
+              size="sm"
+              disabled={isLoadingProposals}
+            >
+              {isLoadingProposals ? '刷新中...' : '刷新'}
+            </Button>
+          </div>
         </CardHeader>
         <CardContent>
           <div className="space-y-4">
-            {proposals.length === 0 ? (
+            {isLoadingProposals ? (
+              <div className="text-center py-8">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
+                <p className="text-gray-600">正在加载提案列表...</p>
+              </div>
+            ) : proposalError ? (
+              <div className="text-center py-8">
+                <div className="text-red-600 mb-4">⚠️ {proposalError}</div>
+                <Button 
+                  onClick={refreshProposals}
+                  variant="outline"
+                  size="sm"
+                >
+                  重试
+                </Button>
+              </div>
+            ) : proposals.length === 0 ? (
               <p className="text-gray-500 text-center py-8">暂无提案</p>
             ) : (
               proposals.map((proposal) => (

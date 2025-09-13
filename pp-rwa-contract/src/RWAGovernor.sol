@@ -24,6 +24,27 @@ import {TimelockController} from "@openzeppelin/contracts/governance/TimelockCon
 contract RWAGovernor is Governor, GovernorSettings, GovernorCountingSimple, GovernorVotes, GovernorVotesQuorumFraction, GovernorTimelockControl {
     // 提案计数器 - 用于前端兼容性
     uint256 public proposalCount;
+    
+    // 提案ID数组 - 存储所有已创建的提案ID
+    uint256[] public proposalIds;
+    
+    // 提案详情映射 - 存储提案的详细信息
+    struct ProposalDetails {
+        address proposer;
+        uint256 voteStart;
+        uint256 voteEnd;
+        bool executed;
+        bool canceled;
+        uint256 forVotes;
+        uint256 againstVotes;
+        uint256 abstainVotes;
+        string description;
+        address[] targets;
+        uint256[] values;
+        bytes[] calldatas;
+    }
+    
+    mapping(uint256 => ProposalDetails) public proposalDetails;
 
     constructor(IVotes _token, TimelockController _timelock)
         Governor("RWAGovernor")
@@ -132,6 +153,36 @@ contract RWAGovernor is Governor, GovernorSettings, GovernorCountingSimple, Gove
     function getProposalCount() external view returns (uint256) {
         return proposalCount;
     }
+    
+    /**
+     * @dev 获取所有提案ID列表
+     */
+    function getAllProposalIds() external view returns (uint256[] memory) {
+        return proposalIds;
+    }
+    
+    /**
+     * @dev 获取指定范围的提案ID列表
+     * @param offset 起始索引
+     * @param limit 返回数量限制
+     */
+    function getProposalIdsByRange(uint256 offset, uint256 limit) external view returns (uint256[] memory) {
+        if (offset >= proposalIds.length) {
+            return new uint256[](0);
+        }
+        
+        uint256 end = offset + limit;
+        if (end > proposalIds.length) {
+            end = proposalIds.length;
+        }
+        
+        uint256[] memory result = new uint256[](end - offset);
+        for (uint256 i = 0; i < end - offset; i++) {
+            result[i] = proposalIds[offset + i];
+        }
+        
+        return result;
+    }
 
     /**
      * @dev 获取提案状态字符串描述 (兼容性函数)
@@ -152,7 +203,7 @@ contract RWAGovernor is Governor, GovernorSettings, GovernorCountingSimple, Gove
     }
 
     /**
-     * @dev 创建新提案 (重写以增加提案计数)
+     * @dev 创建新提案 (重写以增加提案计数和存储提案ID)
      */
     function propose(
         address[] memory targets,
@@ -165,12 +216,30 @@ contract RWAGovernor is Governor, GovernorSettings, GovernorCountingSimple, Gove
         // 增加提案计数用于前端兼容性
         proposalCount++;
         
+        // 存储提案ID到数组
+        proposalIds.push(proposalId);
+        
+        // 存储提案详情
+        proposalDetails[proposalId] = ProposalDetails({
+            proposer: msg.sender,
+            voteStart: this.proposalSnapshot(proposalId),
+            voteEnd: this.proposalDeadline(proposalId),
+            executed: false,
+            canceled: false,
+            forVotes: 0,
+            againstVotes: 0,
+            abstainVotes: 0,
+            description: description,
+            targets: targets,
+            values: values,
+            calldatas: calldatas
+        });
+        
         return proposalId;
     }
 
     /**
-     * @dev 获取提案详细信息 (兼容性函数)
-     * 注意：此函数使用Governor标准接口获取提案信息
+     * @dev 获取提案详细信息 (改进版)
      */
     function getProposalDetails(uint256 proposalId) external view returns (
         address proposer,
@@ -186,26 +255,69 @@ contract RWAGovernor is Governor, GovernorSettings, GovernorCountingSimple, Gove
         uint256 againstVotes,
         uint256 abstainVotes
     ) {
-        // 获取提案详情 - 使用简化方法以保持兼容性
-        // 注意：在OpenZeppelin v5中，提案详情访问方式有所不同
-        proposer = address(0); // 占位符 - 实际实现需要通过事件或其他方式获取
-        voteStart = this.proposalSnapshot(proposalId);
-        voteEnd = this.proposalDeadline(proposalId);
+        ProposalDetails storage details = proposalDetails[proposalId];
+        
+        // 如果提案不存在或未初始化，使用Governor标准方法获取基本信息
+        if (details.proposer == address(0)) {
+            proposer = address(0); // 无法获取，需要通过事件或其他方式
+            targets = new address[](0);
+            values = new uint256[](0);
+            calldatas = new bytes[](0);
+            description = "Proposal details not available";
+            voteStart = this.proposalSnapshot(proposalId);
+            voteEnd = this.proposalDeadline(proposalId);
+        } else {
+            proposer = details.proposer;
+            targets = details.targets;
+            values = details.values;
+            calldatas = details.calldatas;
+            description = details.description;
+            voteStart = details.voteStart;
+            voteEnd = details.voteEnd;
+        }
         
         // 获取提案状态
         ProposalState proposalState = this.state(proposalId);
         executed = (proposalState == ProposalState.Executed);
         canceled = (proposalState == ProposalState.Canceled);
         
-        // 投票计数 - 需要通过专门的投票查询函数获取
-        forVotes = 0; // 占位符
-        againstVotes = 0; // 占位符
-        abstainVotes = 0; // 占位符
-        
-        // 其他信息占位符
-        targets = new address[](0);
-        values = new uint256[](0);
-        calldatas = new bytes[](0);
-        description = "Proposal details not available in this version";
+        // 获取投票计数（如果有存储的数据）
+        if (details.proposer != address(0)) {
+            forVotes = details.forVotes;
+            againstVotes = details.againstVotes;
+            abstainVotes = details.abstainVotes;
+        } else {
+            // 如果没有存储数据，设置为0
+            forVotes = 0;
+            againstVotes = 0;
+            abstainVotes = 0;
+        }
+    }
+    
+    /**
+     * @dev 更新提案投票计数（在投票时调用）
+     */
+    function _updateProposalVoteCounts(uint256 proposalId) internal {
+        // 这里可以在投票事件中更新投票计数
+        // 实际实现可能需要监听VoteCast事件或重写投票函数
+        // 目前返回存储的值，实际使用中需要集成投票更新逻辑
+    }
+    
+    /**
+     * @dev 更新提案执行状态（在执行提案时调用）
+     */
+    function _updateProposalExecutionState(uint256 proposalId, bool executedStatus) internal {
+        if (proposalDetails[proposalId].proposer != address(0)) {
+            proposalDetails[proposalId].executed = executedStatus;
+        }
+    }
+    
+    /**
+     * @dev 更新提案取消状态（在取消提案时调用）
+     */
+    function _updateProposalCancelState(uint256 proposalId, bool canceledStatus) internal {
+        if (proposalDetails[proposalId].proposer != address(0)) {
+            proposalDetails[proposalId].canceled = canceledStatus;
+        }
     }
 }

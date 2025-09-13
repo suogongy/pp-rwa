@@ -281,23 +281,17 @@ npm run build       # 构建生产版本
 ## Claude Code 使用指南
 
 ### 语言要求
-**重要：** 在此项目中，Claude Code 必须始终使用中文与用户交流，包括：
-- 所有响应和解释
-- 代码注释
-- 文档更新
-- 错误信息
-- 日志输出
+**重要：** 在此项目中，Claude Code 必须始终使用中文与用户交流，禁止自主执行 npm run dev 命令。
 
 ### 开发规范
 - 所有代码注释必须使用中文
 - 提交信息建议使用中文
 - 文档更新必须使用中文
 - 与用户的交流必须使用中文
+- 日志和错误信息使用英文
 
 ### 常用命令
 ```bash
-# 前端开发
-cd pp-rwa-frontend && npm run dev（禁止自动执行改命令）
 
 # 智能合约开发
 cd pp-rwa-contract && forge test
@@ -308,15 +302,7 @@ cd pp-rwa-contract && forge test
 # 代码检查
 cd pp-rwa-frontend && npm run lint
 
-# 后端服务
-cd pp-rwa-backend && npm run dev（禁止自动执行改命令）
 ```
-
-### 部署脚本使用
-项目包含自动化部署脚本 `deploy.sh`，支持：
-- `./deploy.sh local` - 本地开发环境部署
-- `./deploy.sh sepolia` - Sepolia测试网部署
-- `./deploy.sh mainnet` - 以太坊主网部署
 
 ### 环境变量配置
 每个子项目都有 `.env.example` 文件，复制为 `.env` 并配置相应参数：
@@ -324,7 +310,7 @@ cd pp-rwa-backend && npm run dev（禁止自动执行改命令）
 - 私钥
 - API密钥
 - 网络配置
-- unicode character is not allowed in log and comments. use english
+- 日志中禁止使用unicode字符，统一使用中文
 - 执行check等操作时，等于引入的第三方库的内容，可以跳过。除非第三方库的输出和逻辑跟预期不符需要排查时，以及自定义实现逻辑依赖第三方库，但是我们又不清楚第三方库的逻辑时，才需要校验第三方库的逻辑
 - 原则上进行执行npm run dev，可以先尝试服务是否在启动状态。
 - 禁止添加sh等脚本文件
