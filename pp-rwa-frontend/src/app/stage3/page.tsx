@@ -208,6 +208,26 @@ export default function Stage3Page() {
                     
                     <TabsContent value="governance" className="mt-6">
                       <GovernanceManagement address={address || ''} />
+                      
+                      <Card className="mt-6">
+                        <CardHeader>
+                          <CardTitle>代币分配</CardTitle>
+                          <CardDescription>
+                            向不同账户分配RWA20代币，实现多账号治理
+                          </CardDescription>
+                        </CardHeader>
+                        <CardContent>
+                          <Link 
+                            href="/stage3/token-transfer" 
+                            target="_blank" 
+                            rel="noopener noreferrer"
+                          >
+                            <Button className="w-full">
+                              打开代币转账页面
+                            </Button>
+                          </Link>
+                        </CardContent>
+                      </Card>
                     </TabsContent>
                     
                     <TabsContent value="multisig" className="mt-6">
