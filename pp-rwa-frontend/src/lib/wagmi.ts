@@ -3235,6 +3235,83 @@ export const RWAUpgradeableProxy_ABI = [
     ],
     "stateMutability": "view",
     "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "",
+        "type": "address"
+      }
+    ],
+    "name": "isProxy",
+    "outputs": [
+      {
+        "internalType": "bool",
+        "name": "",
+        "type": "bool"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "",
+        "type": "uint256"
+      }
+    ],
+    "name": "proxyAddresses",
+    "outputs": [
+      {
+        "internalType": "address",
+        "name": "",
+        "type": "address"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "",
+        "type": "address"
+      },
+      {
+        "internalType": "uint256",
+        "name": "",
+        "type": "uint256"
+      }
+    ],
+    "name": "versionHistory",
+    "outputs": [
+      {
+        "internalType": "address",
+        "name": "implementation",
+        "type": "address"
+      },
+      {
+        "internalType": "uint256",
+        "name": "version",
+        "type": "uint256"
+      },
+      {
+        "internalType": "uint256",
+        "name": "timestamp",
+        "type": "uint256"
+      },
+      {
+        "internalType": "address",
+        "name": "upgradedBy",
+        "type": "address"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
   }
 ] as const
 

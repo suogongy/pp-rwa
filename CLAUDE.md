@@ -297,7 +297,7 @@ npm run build       # 构建生产版本
 ### 常用命令
 ```bash
 # 前端开发
-cd pp-rwa-frontend && npm run dev
+cd pp-rwa-frontend && npm run dev（禁止自动执行改命令）
 
 # 智能合约开发
 cd pp-rwa-contract && forge test
@@ -309,7 +309,7 @@ cd pp-rwa-contract && forge test
 cd pp-rwa-frontend && npm run lint
 
 # 后端服务
-cd pp-rwa-backend && npm run dev
+cd pp-rwa-backend && npm run dev（禁止自动执行改命令）
 ```
 
 ### 部署脚本使用
@@ -326,6 +326,6 @@ cd pp-rwa-backend && npm run dev
 - 网络配置
 - unicode character is not allowed in log and comments. use english
 - 执行check等操作时，等于引入的第三方库的内容，可以跳过。除非第三方库的输出和逻辑跟预期不符需要排查时，以及自定义实现逻辑依赖第三方库，但是我们又不清楚第三方库的逻辑时，才需要校验第三方库的逻辑
-- 原则上不要自己启动本地服务。如果确实有测试校验的需求，那么校验测试完毕后记得关闭服务。因为在当前claude窗口内，你启动服务后，没有校验，也没有关闭的简单命令。我会在另外的终端窗口自行启动服务验证。
+- 原则上进行执行npm run dev，可以先尝试服务是否在启动状态。
 - 禁止添加sh等脚本文件
 - 所有日志输出中，只用普通文本，避免使用emoji等特殊字符
