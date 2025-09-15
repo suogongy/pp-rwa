@@ -176,8 +176,8 @@ export function GovernanceManagement({ address }: { address: string }) {
         proposer,
         voteStart: voteStart.toString(),
         voteEnd: voteEnd.toString(),
-        voteStartDate: voteStart > 0 ? new Date(Number(voteStart) * 1000).toLocaleString() : 'Invalid',
-        voteEndDate: voteEnd > 0 ? new Date(Number(voteEnd) * 1000).toLocaleString() : 'Invalid',
+        voteStartDate: voteStart > BigInt(0) ? new Date(Number(voteStart) * 1000).toLocaleString() : 'Invalid timestamp',
+        voteEndDate: voteEnd > BigInt(0) ? new Date(Number(voteEnd) * 1000).toLocaleString() : 'Invalid timestamp',
         currentTime: new Date(Number(currentTime) * 1000).toLocaleString(),
         currentBlock: currentBlock.number,
         executed,
@@ -306,8 +306,8 @@ export function GovernanceManagement({ address }: { address: string }) {
         id: proposalId,
         proposer,
         description,
-        voteStart: isValidTimestamp ? voteStart : BigInt(Math.floor(Date.now() / 1000)),
-        voteEnd: isValidTimestamp ? voteEnd : BigInt(Math.floor(Date.now() / 1000) + 86400),
+        voteStart: isValidTimestamp ? voteStart : BigInt(0),
+        voteEnd: isValidTimestamp ? voteEnd : BigInt(0),
         executed,
         canceled,
         forVotes,
@@ -342,8 +342,8 @@ export function GovernanceManagement({ address }: { address: string }) {
           id: proposalId,
           proposer: '0x0000000000000000000000000000000000000000',
           description: `提案 ${proposalId.toString()} 详情获取失败 - 可能不存在`,
-          voteStart: BigInt(Math.floor(Date.now() / 1000) - 86400),
-          voteEnd: BigInt(Math.floor(Date.now() / 1000) + 86400),
+          voteStart: BigInt(0),
+          voteEnd: BigInt(0),
           executed: false,
           canceled: false,
           forVotes: BigInt(0),
@@ -1017,10 +1017,10 @@ export function GovernanceManagement({ address }: { address: string }) {
 
                   <div className="grid grid-cols-2 gap-4 text-sm mb-3 text-gray-500">
                     <div>
-                      开始时间: {new Date(Number(proposal.voteStart) * 1000).toLocaleString()}
+                      开始区块: {proposal.voteStart > BigInt(0) ? proposal.voteStart.toString() : '区块无效'}
                     </div>
                     <div>
-                      结束时间: {new Date(Number(proposal.voteEnd) * 1000).toLocaleString()}
+                      结束区块: {proposal.voteEnd > BigInt(0) ? proposal.voteEnd.toString() : '区块无效'}
                     </div>
                   </div>
                   

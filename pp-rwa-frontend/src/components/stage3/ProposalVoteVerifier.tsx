@@ -170,8 +170,8 @@ export default function ProposalVoteVerifier() {
               <div><strong>目标地址:</strong> {proposalDetails[1]?.[0] || '无'}</div>
               <div><strong>以太值:</strong> {proposalDetails[2]?.[0] ? formatEther(proposalDetails[2][0]) : '0'} ETH</div>
               <div><strong>描述:</strong> {proposalDetails[4] || '无描述'}</div>
-              <div><strong>投票开始时间:</strong> {new Date(Number(proposalDetails[5]) * 1000).toLocaleString()}</div>
-              <div><strong>投票结束时间:</strong> {new Date(Number(proposalDetails[6]) * 1000).toLocaleString()}</div>
+              <div><strong>投票开始区块:</strong> {proposalDetails && proposalDetails[5] > 0 ? proposalDetails[5].toString() : '区块无效'}</div>
+              <div><strong>投票结束区块:</strong> {proposalDetails && proposalDetails[6] > 0 ? proposalDetails[6].toString() : '区块无效'}</div>
               <div><strong>已执行:</strong> {proposalDetails[7] ? '是' : '否'}</div>
               <div><strong>已取消:</strong> {proposalDetails[8] ? '是' : '否'}</div>
             </div>

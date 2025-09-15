@@ -591,7 +591,7 @@ export function ProxyManagement({ address }: { address: string }) {
                         <div className="text-sm text-gray-600 mt-1">
                           <div>实现地址: {version.implementation.slice(0, 10)}...{version.implementation.slice(-8)}</div>
                           <div>升级者: {version.upgradedBy.slice(0, 6)}...{version.upgradedBy.slice(-4)}</div>
-                          <div>时间: {new Date(version.timestamp * 1000).toLocaleString()}</div>
+                          <div>时间: {version.timestamp > 0 ? new Date(version.timestamp * 1000).toLocaleString() : '时间无效'}</div>
                         </div>
                       </div>
                     ))}

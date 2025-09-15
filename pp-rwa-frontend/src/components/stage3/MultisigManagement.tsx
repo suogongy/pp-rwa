@@ -890,8 +890,8 @@ export function MultisigManagement({ address }: { address: string }) {
                     <div className="text-sm text-gray-600 space-y-1">
                       <p><strong>目标地址:</strong> {tx.destination}</p>
                       <p><strong>金额:</strong> {Number(tx.value) / 1e18} ETH</p>
-                      <p><strong>创建时间:</strong> {new Date(Number(tx.timestamp) * 1000).toLocaleString()}</p>
-                      <p><strong>过期时间:</strong> {new Date(Number(tx.expiration) * 1000).toLocaleString()}</p>
+                      <p><strong>创建时间:</strong> {tx.timestamp > 0n ? new Date(Number(tx.timestamp) * 1000).toLocaleString() : '时间无效'}</p>
+                      <p><strong>过期时间:</strong> {tx.expiration > 0n ? new Date(Number(tx.expiration) * 1000).toLocaleString() : '时间无效'}</p>
                     </div>
                     
                     {tx.data && tx.data !== '0x' && (

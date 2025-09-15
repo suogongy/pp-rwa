@@ -1023,7 +1023,7 @@ export default function CounterDemoPage() {
                                   V{version.version}
                                 </Badge>
                                 <span className="text-xs text-gray-500">
-                                  {new Date(version.timestamp * 1000).toLocaleString()}
+                                  {version.timestamp > 0 ? new Date(version.timestamp * 1000).toLocaleString() : '时间无效'}
                                 </span>
                               </div>
                               <div className="text-xs font-mono text-gray-600">
