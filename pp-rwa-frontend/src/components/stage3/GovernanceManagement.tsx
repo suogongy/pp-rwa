@@ -17,6 +17,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Badge } from '@/components/ui/badge'
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { formatEther, parseEther, keccak256, encodePacked } from 'viem'
 
 interface Proposal {
@@ -147,26 +148,42 @@ export function GovernanceManagement({ address }: { address: string }) {
         console.warn(`合约state方法失败，尝试getProposalBasicInfo:`, stateError)
       }
 
-      // 备用方案：通过 getProposalBasicInfo 获取状态
-      const proposalData = await publicClient.readContract({
+      // 备用方案：通过 getProposalBasicInfo 获取基本信息，然后通过其他函数获取状态
+      await publicClient.readContract({
         address: RWAGovernor_ADDRESS,
         abi: RWAGovernor_ABI,
         functionName: 'getProposalBasicInfo',
         args: [proposalId],
       }) as [
         string, // proposer
-        string, // description
-        bigint, // voteStart
-        bigint, // voteEnd
-        boolean, // executed
-        boolean, // canceled,
+        bigint, // createdAt
+        string, // extraInfo
       ]
 
-      const proposer = proposalData[0]
-      const voteStart = proposalData[2]
-      const voteEnd = proposalData[3]
-      const executed = proposalData[4]
-      const canceled = proposalData[5]
+      // 通过其他函数获取投票时间和状态
+      const voteStart = await publicClient.readContract({
+        address: RWAGovernor_ADDRESS,
+        abi: RWAGovernor_ABI,
+        functionName: 'proposalSnapshot',
+        args: [proposalId],
+      }) as bigint
+
+      const voteEnd = await publicClient.readContract({
+        address: RWAGovernor_ADDRESS,
+        abi: RWAGovernor_ABI,
+        functionName: 'proposalDeadline',
+        args: [proposalId],
+      }) as bigint
+
+      const stateValue = await publicClient.readContract({
+        address: RWAGovernor_ADDRESS,
+        abi: RWAGovernor_ABI,
+        functionName: 'state',
+        args: [proposalId],
+      }) as bigint
+
+      const executed = stateValue === BigInt(7) // Executed
+      const canceled = stateValue === BigInt(2) // Canceled
 
       // 获取当前区块时间而不是本地时间
       const currentBlock = await publicClient.getBlock()
@@ -213,87 +230,203 @@ export function GovernanceManagement({ address }: { address: string }) {
     }
   }
   
+  // 状态管理
+  const [selectedProposal, setSelectedProposal] = useState<Proposal | null>(null)
+  const [isProposalDetailsOpen, setIsProposalDetailsOpen] = useState(false)
+
+  // 显示提案详情
+  const showProposalDetails = (proposal: Proposal) => {
+    setSelectedProposal(proposal)
+    setIsProposalDetailsOpen(true)
+  }
+
+  // 关闭提案详情
+  const closeProposalDetails = () => {
+    setIsProposalDetailsOpen(false)
+    setSelectedProposal(null)
+  }
+
   // 获取提案详情的辅助函数 - 使用优化后的分离函数调用
   const getProposalDetails = async (proposalId: bigint): Promise<Proposal | null> => {
     try {
       console.log(`🔍 获取提案 ${proposalId.toString()} 详情...`)
 
       let proposer: string, description: string, voteStart: bigint, voteEnd: bigint, executed: boolean, canceled: boolean
+      let createdAt: bigint = BigInt(0), extraInfo: string = ''
       let forVotes: bigint = BigInt(0), againstVotes: bigint = BigInt(0), abstainVotes: bigint = BigInt(0)
       let targets: string[] = [], values: bigint[] = [], calldatas: string[] = []
 
+      // 首先检查提案是否存在 - 通过调用 state 函数
+      let proposalExists = false
       try {
-        // 使用优化后的分离函数调用，避免堆栈溢出
-        [
-          proposer,
-          description,
-          voteStart,
-          voteEnd,
-          executed,
-          canceled,
-        ] = await publicClient.readContract({
+        await publicClient.readContract({
           address: RWAGovernor_ADDRESS,
           abi: RWAGovernor_ABI,
-          functionName: 'getProposalBasicInfo',
+          functionName: 'state',
           args: [proposalId],
-        }) as [
-          string, // proposer
-          string, // description
-          bigint, // voteStart
-          bigint, // voteEnd
-          boolean, // executed
-          boolean, // canceled
-        ]
-      } catch (basicInfoError) {
-        console.warn(`⚠️ 获取提案基本信息失败: ${basicInfoError}`)
-        // 设置默认值
+        })
+        proposalExists = true
+        console.log(`✅ 提案 ${proposalId.toString()} 存在`)
+      } catch (stateError) {
+        console.warn(`⚠️ 提案 ${proposalId.toString()} 不存在: ${stateError}`)
+        proposalExists = false
+      }
+
+      if (proposalExists) {
+        try {
+          // 使用优化后的 getProposalBasicInfo 函数（返回 proposer, createdAt, extraInfo）
+          [
+            proposer,
+            createdAt,
+            extraInfo,
+          ] = await publicClient.readContract({
+            address: RWAGovernor_ADDRESS,
+            abi: RWAGovernor_ABI,
+            functionName: 'getProposalBasicInfo',
+            args: [proposalId],
+          }) as [
+            string, // proposer
+            bigint, // createdAt
+            string, // extraInfo
+          ]
+
+          // 使用 OpenZeppelin 标准函数获取投票时间
+          voteStart = await publicClient.readContract({
+            address: RWAGovernor_ADDRESS,
+            abi: RWAGovernor_ABI,
+            functionName: 'proposalSnapshot',
+            args: [proposalId],
+          }) as bigint
+
+          voteEnd = await publicClient.readContract({
+            address: RWAGovernor_ADDRESS,
+            abi: RWAGovernor_ABI,
+            functionName: 'proposalDeadline',
+            args: [proposalId],
+          }) as bigint
+
+          // 获取提案状态
+          const stateValue = await publicClient.readContract({
+            address: RWAGovernor_ADDRESS,
+            abi: RWAGovernor_ABI,
+            functionName: 'state',
+            args: [proposalId],
+          }) as bigint
+
+          executed = stateValue === BigInt(7) // Executed
+          canceled = stateValue === BigInt(2) // Canceled
+
+          console.log(`✅ 通过 getProposalBasicInfo 获取到提案 ${proposalId.toString()} 基本信息:`, {
+            proposer,
+            createdAt: createdAt.toString(),
+            extraInfo,
+            voteStart: voteStart.toString(),
+            voteEnd: voteEnd.toString(),
+            executed,
+            canceled
+          })
+
+        } catch (basicInfoError) {
+          console.warn(`⚠️ 获取提案基本信息失败: ${basicInfoError}`)
+          // 设置默认值
+          proposer = '0x0000000000000000000000000000000000000000'
+          createdAt = BigInt(0)
+          extraInfo = ''
+          voteStart = BigInt(0)
+          voteEnd = BigInt(0)
+          executed = false
+          canceled = false
+          description = '' // 确保description也有默认值
+        }
+      } else {
+        // 提案不存在，设置默认值
         proposer = '0x0000000000000000000000000000000000000000'
-        description = '提案信息不可用'
+        createdAt = BigInt(0)
+        extraInfo = ''
         voteStart = BigInt(0)
         voteEnd = BigInt(0)
         executed = false
         canceled = false
+        description = '' // 确保description也有默认值
+        console.log(`⚠️ 提案 ${proposalId.toString()} 不存在，使用默认值`)
       }
 
-      try {
-        [
-          forVotes,
-          againstVotes,
-          abstainVotes,
-        ] = await publicClient.readContract({
-          address: RWAGovernor_ADDRESS,
-          abi: RWAGovernor_ABI,
-          functionName: 'getProposalVotes',
-          args: [proposalId],
-        }) as [
-          bigint, // forVotes
-          bigint, // againstVotes
-          bigint, // abstainVotes
-        ]
-      } catch (votesError) {
-        console.warn(`⚠️ 获取提案投票信息失败: ${votesError}`)
-        // 保持默认值 0
+      // 只有提案存在时才获取投票数据
+      if (proposalExists) {
+        try {
+          // 优先使用 OpenZeppelin 标准的 proposalVotes 函数获取实时投票数据
+          [
+            againstVotes,
+            forVotes,
+            abstainVotes,
+          ] = await publicClient.readContract({
+            address: RWAGovernor_ADDRESS,
+            abi: [
+              {
+                inputs: [{ name: 'proposalId', type: 'uint256' }],
+                name: 'proposalVotes',
+                outputs: [
+                  { name: 'againstVotes', type: 'uint256' },
+                  { name: 'forVotes', type: 'uint256' },
+                  { name: 'abstainVotes', type: 'uint256' }
+                ],
+                stateMutability: 'view',
+                type: 'function'
+              }
+            ],
+            functionName: 'proposalVotes',
+            args: [proposalId],
+          }) as [
+            bigint, // againstVotes
+            bigint, // forVotes
+            bigint, // abstainVotes
+          ]
+
+          console.log(`✅ 通过 proposalVotes 获取到提案 ${proposalId.toString()} 投票数据:`, {
+            forVotes: forVotes.toString(),
+            againstVotes: againstVotes.toString(),
+            abstainVotes: abstainVotes.toString()
+          })
+
+        } catch (standardVotesError) {
+          console.warn(`⚠️ 通过 proposalVotes 获取投票信息失败，尝试 getProposalVotes: ${standardVotesError}`)
+
+          // 备用方案：使用自定义的 getProposalVotes 函数
+          try {
+            [
+              forVotes,
+              againstVotes,
+              abstainVotes,
+            ] = await publicClient.readContract({
+              address: RWAGovernor_ADDRESS,
+              abi: RWAGovernor_ABI,
+              functionName: 'getProposalVotes',
+              args: [proposalId],
+            }) as [
+              bigint, // forVotes
+              bigint, // againstVotes
+              bigint, // abstainVotes
+            ]
+
+            console.log(`✅ 通过 getProposalVotes 获取到提案 ${proposalId.toString()} 投票数据:`, {
+              forVotes: forVotes.toString(),
+              againstVotes: againstVotes.toString(),
+              abstainVotes: abstainVotes.toString()
+            })
+
+          } catch (customVotesError) {
+            console.warn(`⚠️ 获取提案投票信息失败: ${customVotesError}`)
+            // 保持默认值 0
+          }
+        }
+      } else {
+        console.log(`⚠️ 提案 ${proposalId.toString()} 不存在，跳过投票数据获取`)
       }
 
-      try {
-        [
-          targets,
-          values,
-          calldatas,
-        ] = await publicClient.readContract({
-          address: RWAGovernor_ADDRESS,
-          abi: RWAGovernor_ABI,
-          functionName: 'getProposalActions',
-          args: [proposalId],
-        }) as [
-          string[], // targets
-          bigint[], // values
-          string[], // calldatas
-        ]
-      } catch (actionsError) {
-        console.warn(`⚠️ 获取提案执行参数失败: ${actionsError}`)
-        // 保持默认空数组
-      }
+      // 提案执行信息设置为空数组（这些数据现在通过事件获取而不是存储）
+      targets = []
+      values = []
+      calldatas = []
 
       // 获取提案状态
       const state = await getProposalState(proposalId)
@@ -1001,17 +1134,20 @@ export function GovernanceManagement({ address }: { address: string }) {
                     </Badge>
                   </div>
                   
-                  <p className="text-sm mb-3">{proposal.description}</p>
+                  <p className="text-sm mb-3 line-clamp-2">{proposal.description || '无描述信息'}</p>
                   
                   <div className="grid grid-cols-3 gap-4 text-sm mb-3">
                     <div>
                       <span className="text-green-600">赞成: {formatEther(proposal.forVotes)}</span>
+                      <div className="text-xs text-gray-500">实时数据</div>
                     </div>
                     <div>
                       <span className="text-red-600">反对: {formatEther(proposal.againstVotes)}</span>
+                      <div className="text-xs text-gray-500">实时数据</div>
                     </div>
                     <div>
                       <span className="text-gray-600">弃权: {formatEther(proposal.abstainVotes)}</span>
+                      <div className="text-xs text-gray-500">实时数据</div>
                     </div>
                   </div>
 
@@ -1079,6 +1215,15 @@ export function GovernanceManagement({ address }: { address: string }) {
                         取消
                       </Button>
                     )}
+
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => showProposalDetails(proposal)}
+                      className="text-blue-600 border-blue-200 hover:bg-blue-50"
+                    >
+                      查看详情
+                    </Button>
                   </div>
                 </div>
               ))
@@ -1086,6 +1231,246 @@ export function GovernanceManagement({ address }: { address: string }) {
           </div>
         </CardContent>
       </Card>
+
+      {/* 提案详情模态框 */}
+      <Dialog open={isProposalDetailsOpen} onOpenChange={setIsProposalDetailsOpen}>
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>提案详情 #{selectedProposal?.id.toString()}</DialogTitle>
+            <DialogDescription>
+              查看提案的完整信息和执行参数
+            </DialogDescription>
+          </DialogHeader>
+
+          {selectedProposal && (
+            <div className="space-y-6">
+              {/* 基本信息 */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-lg">基本信息</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <Label className="text-sm font-medium text-gray-600">提案ID</Label>
+                      <div className="font-mono text-sm">{selectedProposal.id.toString()}</div>
+                    </div>
+                    <div>
+                      <Label className="text-sm font-medium text-gray-600">提议者</Label>
+                      <div className="font-mono text-sm">{selectedProposal.proposer}</div>
+                    </div>
+                    <div>
+                      <Label className="text-sm font-medium text-gray-600">状态</Label>
+                      <Badge className={getStateBadgeColor(selectedProposal.state)}>
+                        {selectedProposal.state}
+                      </Badge>
+                    </div>
+                    <div>
+                      <Label className="text-sm font-medium text-gray-600">创建时间</Label>
+                      <div className="text-sm">
+                        {selectedProposal.voteStart > BigInt(0)
+                          ? new Date(Number(selectedProposal.voteStart) * 1000).toLocaleString()
+                          : '未知'}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div>
+                    <Label className="text-sm font-medium text-gray-600">提案描述</Label>
+                    <div className="mt-1 p-3 bg-gray-50 rounded-md text-sm">
+                      {selectedProposal.description || '无描述信息'}
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* 投票信息 */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-lg">投票信息</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="grid grid-cols-3 gap-4 text-center">
+                    <div>
+                      <div className="text-2xl font-bold text-green-600">
+                        {parseFloat(formatEther(selectedProposal.forVotes)).toFixed(2)}
+                      </div>
+                      <div className="text-sm text-gray-600">赞成票</div>
+                    </div>
+                    <div>
+                      <div className="text-2xl font-bold text-red-600">
+                        {parseFloat(formatEther(selectedProposal.againstVotes)).toFixed(2)}
+                      </div>
+                      <div className="text-sm text-gray-600">反对票</div>
+                    </div>
+                    <div>
+                      <div className="text-2xl font-bold text-gray-600">
+                        {parseFloat(formatEther(selectedProposal.abstainVotes)).toFixed(2)}
+                      </div>
+                      <div className="text-sm text-gray-600">弃权票</div>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4 mt-4 text-sm">
+                    <div>
+                      <Label className="text-sm font-medium text-gray-600">投票开始区块</Label>
+                      <div className="font-mono">
+                        {selectedProposal.voteStart > BigInt(0) ? selectedProposal.voteStart.toString() : '区块无效'}
+                      </div>
+                    </div>
+                    <div>
+                      <Label className="text-sm font-medium text-gray-600">投票结束区块</Label>
+                      <div className="font-mono">
+                        {selectedProposal.voteEnd > BigInt(0) ? selectedProposal.voteEnd.toString() : '区块无效'}
+                      </div>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* 执行参数 */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-lg">执行参数</CardTitle>
+                  <CardDescription className="text-sm">
+                    提案执行时的目标地址、调用数据等信息
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div>
+                    <Label className="text-sm font-medium text-gray-600">目标地址 ({selectedProposal.targets?.length || 0})</Label>
+                    <div className="mt-1 space-y-1">
+                      {selectedProposal.targets && selectedProposal.targets.length > 0 ? (
+                        selectedProposal.targets.map((target, index) => (
+                          <div key={index} className="font-mono text-sm bg-gray-50 p-2 rounded">
+                            {target}
+                          </div>
+                        ))
+                      ) : (
+                        <div className="text-sm text-gray-500">无目标地址</div>
+                      )}
+                    </div>
+                  </div>
+
+                  <div>
+                    <Label className="text-sm font-medium text-gray-600">发送价值 ({selectedProposal.values?.length || 0})</Label>
+                    <div className="mt-1 space-y-1">
+                      {selectedProposal.values && selectedProposal.values.length > 0 ? (
+                        selectedProposal.values.map((value, index) => (
+                          <div key={index} className="font-mono text-sm bg-gray-50 p-2 rounded">
+                            {parseFloat(formatEther(value)).toFixed(6)} ETH
+                          </div>
+                        ))
+                      ) : (
+                        <div className="text-sm text-gray-500">无发送价值</div>
+                      )}
+                    </div>
+                  </div>
+
+                  <div>
+                    <Label className="text-sm font-medium text-gray-600">调用数据 ({selectedProposal.calldatas?.length || 0})</Label>
+                    <div className="mt-1 space-y-1">
+                      {selectedProposal.calldatas && selectedProposal.calldatas.length > 0 ? (
+                        selectedProposal.calldatas.map((calldata, index) => (
+                          <div key={index} className="font-mono text-xs bg-gray-50 p-2 rounded break-all">
+                            {calldata === '0x' ? '无调用数据' : calldata}
+                          </div>
+                        ))
+                      ) : (
+                        <div className="text-sm text-gray-500">无调用数据</div>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <Label className="text-sm font-medium text-gray-600">已执行</Label>
+                      <Badge variant={selectedProposal.executed ? "default" : "secondary"}>
+                        {selectedProposal.executed ? '是' : '否'}
+                      </Badge>
+                    </div>
+                    <div>
+                      <Label className="text-sm font-medium text-gray-600">已取消</Label>
+                      <Badge variant={selectedProposal.canceled ? "destructive" : "secondary"}>
+                        {selectedProposal.canceled ? '是' : '否'}
+                      </Badge>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* 操作按钮 */}
+              <div className="flex justify-end gap-2 pt-4 border-t">
+                <Button variant="outline" onClick={closeProposalDetails}>
+                  关闭
+                </Button>
+
+                {selectedProposal.state === 'Active' && !selectedProposal.executed && !selectedProposal.canceled && (
+                  <>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => {
+                        handleVote(selectedProposal.id, 1)
+                        closeProposalDetails()
+                      }}
+                      disabled={!currentVotes || currentVotes === BigInt(0)}
+                    >
+                      赞成
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => {
+                        handleVote(selectedProposal.id, 0)
+                        closeProposalDetails()
+                      }}
+                      disabled={!currentVotes || currentVotes === BigInt(0)}
+                    >
+                      反对
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => {
+                        handleVote(selectedProposal.id, 2)
+                        closeProposalDetails()
+                      }}
+                      disabled={!currentVotes || currentVotes === BigInt(0)}
+                    >
+                      弃权
+                    </Button>
+                  </>
+                )}
+
+                {selectedProposal.state === 'Succeeded' && !selectedProposal.executed && (
+                  <Button
+                    onClick={() => {
+                      handleExecute(selectedProposal.id)
+                      closeProposalDetails()
+                    }}
+                  >
+                    执行提案
+                  </Button>
+                )}
+
+                {(selectedProposal.state === 'Pending' || selectedProposal.state === 'Active') &&
+                 selectedProposal.proposer.toLowerCase() === address.toLowerCase() && (
+                  <Button
+                    variant="destructive"
+                    onClick={() => {
+                      handleCancel(selectedProposal.id)
+                      closeProposalDetails()
+                    }}
+                  >
+                    取消提案
+                  </Button>
+                )}
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

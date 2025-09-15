@@ -28,23 +28,13 @@ contract RWAGovernor is Governor, GovernorSettings, GovernorCountingSimple, Gove
     // 提案ID数组 - 存储所有已创建的提案ID
     uint256[] public proposalIds;
     
-    // 提案详情映射 - 存储提案的详细信息
-    struct ProposalDetails {
-        address proposer;
-        uint256 voteStart;
-        uint256 voteEnd;
-        bool executed;
-        bool canceled;
-        uint256 forVotes;
-        uint256 againstVotes;
-        uint256 abstainVotes;
-        string description;
-        address[] targets;
-        uint256[] values;
-        bytes[] calldatas;
+    // 提案元数据映射 - 只存储OpenZeppelin未提供的数据
+    struct ProposalMetadata {
+        uint256 createdAt;       // 创建时间
+        string extraInfo;        // 额外信息（可选）
     }
-    
-    mapping(uint256 => ProposalDetails) public proposalDetails;
+
+    mapping(uint256 => ProposalMetadata) public proposalMetadata;
 
     constructor(IVotes _token, TimelockController _timelock)
         Governor("RWAGovernor")
@@ -219,123 +209,80 @@ contract RWAGovernor is Governor, GovernorSettings, GovernorCountingSimple, Gove
         // 存储提案ID到数组
         proposalIds.push(proposalId);
         
-        // 存储提案详情
-        proposalDetails[proposalId] = ProposalDetails({
-            proposer: msg.sender,
-            voteStart: this.proposalSnapshot(proposalId),
-            voteEnd: this.proposalDeadline(proposalId),
-            executed: false,
-            canceled: false,
-            forVotes: 0,
-            againstVotes: 0,
-            abstainVotes: 0,
-            description: description,
-            targets: targets,
-            values: values,
-            calldatas: calldatas
+        // 存储提案元数据（只存储OpenZeppelin未提供的数据）
+        proposalMetadata[proposalId] = ProposalMetadata({
+            createdAt: block.timestamp,
+            extraInfo: ""  // 可选的额外信息
         });
         
         return proposalId;
     }
 
     /**
-     * @dev 获取提案基本信息 (优化版 - 避免堆栈溢出)
+     * @dev 获取提案基本信息（优化版 - 使用OpenZeppelin标准数据）
      */
     function getProposalBasicInfo(uint256 proposalId) external view returns (
         address proposer,
-        string memory description,
-        uint256 voteStart,
-        uint256 voteEnd,
-        bool executed,
-        bool canceled
+        uint256 createdAt,
+        string memory extraInfo
     ) {
-        ProposalDetails storage details = proposalDetails[proposalId];
+        // 使用OpenZeppelin标准函数获取提案者
+        proposer = this.proposalProposer(proposalId);
 
-        // 如果提案不存在或未初始化，使用Governor标准方法获取基本信息
-        if (details.proposer == address(0)) {
-            proposer = address(0);
-            description = "Proposal details not available";
-
-            // 尝试获取投票时间，如果提案不存在则返回默认值
-            try this.proposalSnapshot(proposalId) returns (uint256 snapshot) {
-                voteStart = snapshot;
-                try this.proposalDeadline(proposalId) returns (uint256 deadline) {
-                    voteEnd = deadline;
-                } catch {
-                    voteEnd = 0;
-                }
-            } catch {
-                voteStart = 0;
-                voteEnd = 0;
-            }
-
-            // 设置默认状态
-            executed = false;
-            canceled = false;
-        } else {
-            proposer = details.proposer;
-            description = details.description;
-            voteStart = details.voteStart;
-            voteEnd = details.voteEnd;
-
-            // 获取提案状态
-            try this.state(proposalId) returns (ProposalState proposalState) {
-                executed = (proposalState == ProposalState.Executed);
-                canceled = (proposalState == ProposalState.Canceled);
-            } catch {
-                // 如果无法获取状态，使用存储的状态
-                executed = details.executed;
-                canceled = details.canceled;
-            }
-        }
+        // 获取提案元数据
+        ProposalMetadata storage metadata = proposalMetadata[proposalId];
+        createdAt = metadata.createdAt;
+        extraInfo = metadata.extraInfo;
     }
 
     /**
-     * @dev 获取提案投票信息 (分离投票数据以避免堆栈溢出)
+     * @dev 获取提案投票信息（使用OpenZeppelin标准数据）
      */
     function getProposalVotes(uint256 proposalId) external view returns (
         uint256 forVotes,
         uint256 againstVotes,
         uint256 abstainVotes
     ) {
-        ProposalDetails storage details = proposalDetails[proposalId];
-
-        if (details.proposer != address(0)) {
-            forVotes = details.forVotes;
-            againstVotes = details.againstVotes;
-            abstainVotes = details.abstainVotes;
-        } else {
-            // 如果没有存储数据，设置为0
-            forVotes = 0;
-            againstVotes = 0;
-            abstainVotes = 0;
-        }
+        // 直接使用OpenZeppelin标准函数
+        (againstVotes, forVotes, abstainVotes) = this.proposalVotes(proposalId);
     }
 
     /**
-     * @dev 获取提案执行参数 (分离执行参数以避免堆栈溢出)
+     * @dev 获取提案完整信息（优化版 - 使用OpenZeppelin标准数据）
      */
-    function getProposalActions(uint256 proposalId) external view returns (
-        address[] memory targets,
-        uint256[] memory values,
-        bytes[] memory calldatas
+    function getProposalFullInfo(uint256 proposalId) external view returns (
+        address proposer,
+        uint256 voteStart,
+        uint256 voteEnd,
+        bool executed,
+        bool canceled,
+        uint256 forVotes,
+        uint256 againstVotes,
+        uint256 abstainVotes,
+        uint256 createdAt,
+        string memory extraInfo
     ) {
-        ProposalDetails storage details = proposalDetails[proposalId];
+        // 使用OpenZeppelin标准函数获取基本信息
+        proposer = this.proposalProposer(proposalId);
+        voteStart = this.proposalSnapshot(proposalId);
+        voteEnd = this.proposalDeadline(proposalId);
 
-        if (details.proposer != address(0)) {
-            targets = details.targets;
-            values = details.values;
-            calldatas = details.calldatas;
-        } else {
-            // 如果没有存储数据，返回空数组
-            targets = new address[](0);
-            values = new uint256[](0);
-            calldatas = new bytes[](0);
-        }
+        // 获取提案状态
+        ProposalState currentState = this.state(proposalId);
+        executed = (currentState == ProposalState.Executed);
+        canceled = (currentState == ProposalState.Canceled);
+
+        // 获取投票数据
+        (againstVotes, forVotes, abstainVotes) = this.proposalVotes(proposalId);
+
+        // 获取元数据
+        ProposalMetadata storage metadata = proposalMetadata[proposalId];
+        createdAt = metadata.createdAt;
+        extraInfo = metadata.extraInfo;
     }
 
     /**
-     * @dev 获取提案详细信息 (旧版本 - 保留向后兼容性)
+     * @dev 获取提案详细信息（旧版本 - 保留向后兼容性）
      * @notice 这个函数由于堆栈限制问题，建议使用上面分离的函数
      */
     function getProposalDetails(uint256 proposalId) external view returns (
@@ -352,53 +299,25 @@ contract RWAGovernor is Governor, GovernorSettings, GovernorCountingSimple, Gove
         uint256 againstVotes,
         uint256 abstainVotes
     ) {
-        // 使用分离的函数来避免堆栈溢出
-        (
-            proposer,
-            description,
-            voteStart,
-            voteEnd,
-            executed,
-            canceled
-        ) = this.getProposalBasicInfo(proposalId);
+        // 使用OpenZeppelin标准函数获取基本信息
+        proposer = this.proposalProposer(proposalId);
+        voteStart = this.proposalSnapshot(proposalId);
+        voteEnd = this.proposalDeadline(proposalId);
 
-        (
-            forVotes,
-            againstVotes,
-            abstainVotes
-        ) = this.getProposalVotes(proposalId);
+        // 获取提案状态
+        ProposalState currentState = this.state(proposalId);
+        executed = (currentState == ProposalState.Executed);
+        canceled = (currentState == ProposalState.Canceled);
 
-        (
-            targets,
-            values,
-            calldatas
-        ) = this.getProposalActions(proposalId);
+        // 获取投票数据
+        (againstVotes, forVotes, abstainVotes) = this.proposalVotes(proposalId);
+
+        // 对于targets、values、calldatas、description，返回空数组/字符串
+        // 这些数据应该通过事件获取，而不是存储
+        targets = new address[](0);
+        values = new uint256[](0);
+        calldatas = new bytes[](0);
+        description = "";
     }
     
-    /**
-     * @dev 更新提案投票计数（在投票时调用）
-     */
-    function _updateProposalVoteCounts(uint256 proposalId) internal {
-        // 这里可以在投票事件中更新投票计数
-        // 实际实现可能需要监听VoteCast事件或重写投票函数
-        // 目前返回存储的值，实际使用中需要集成投票更新逻辑
-    }
-    
-    /**
-     * @dev 更新提案执行状态（在执行提案时调用）
-     */
-    function _updateProposalExecutionState(uint256 proposalId, bool executedStatus) internal {
-        if (proposalDetails[proposalId].proposer != address(0)) {
-            proposalDetails[proposalId].executed = executedStatus;
-        }
-    }
-    
-    /**
-     * @dev 更新提案取消状态（在取消提案时调用）
-     */
-    function _updateProposalCancelState(uint256 proposalId, bool canceledStatus) internal {
-        if (proposalDetails[proposalId].proposer != address(0)) {
-            proposalDetails[proposalId].canceled = canceledStatus;
-        }
-    }
 }

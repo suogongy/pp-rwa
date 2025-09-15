@@ -14,11 +14,11 @@ export default function ProposalVoteVerifier() {
   const [proposalId, setProposalId] = useState('10388695569530123787768146006268480000635881738976960256112883338575564976875')
   const [voterAddress, setVoterAddress] = useState('0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266')
 
-  // 获取提案详情
+  // 获取提案详情 - 使用新的 getProposalFullInfo 函数获取更完整的信息
   const { data: proposalDetails, refetch: refetchProposalDetails } = useReadContract({
     address: RWAGovernor_ADDRESS,
     abi: RWAGovernor_ABI,
-    functionName: 'getProposalDetails',
+    functionName: 'getProposalFullInfo',
     args: [BigInt(proposalId)],
   })
 
@@ -30,7 +30,7 @@ export default function ProposalVoteVerifier() {
     args: [BigInt(proposalId)],
   })
 
-  // 获取提案投票结果（如果有这个方法）
+  // 获取提案投票结果（使用 OpenZeppelin 标准的 proposalVotes 函数）
   const { data: proposalVotes } = useReadContract({
     address: RWAGovernor_ADDRESS,
     abi: [
@@ -38,8 +38,8 @@ export default function ProposalVoteVerifier() {
         inputs: [{ name: 'proposalId', type: 'uint256' }],
         name: 'proposalVotes',
         outputs: [
-          { name: 'forVotes', type: 'uint256' },
           { name: 'againstVotes', type: 'uint256' },
+          { name: 'forVotes', type: 'uint256' },
           { name: 'abstainVotes', type: 'uint256' }
         ],
         stateMutability: 'view',
@@ -167,13 +167,15 @@ export default function ProposalVoteVerifier() {
           {proposalDetails && (
             <div className="mt-4 space-y-2">
               <div><strong>提案者:</strong> {proposalDetails[0]}</div>
-              <div><strong>目标地址:</strong> {proposalDetails[1]?.[0] || '无'}</div>
-              <div><strong>以太值:</strong> {proposalDetails[2]?.[0] ? formatEther(proposalDetails[2][0]) : '0'} ETH</div>
-              <div><strong>描述:</strong> {proposalDetails[4] || '无描述'}</div>
-              <div><strong>投票开始区块:</strong> {proposalDetails && proposalDetails[5] > 0 ? proposalDetails[5].toString() : '区块无效'}</div>
-              <div><strong>投票结束区块:</strong> {proposalDetails && proposalDetails[6] > 0 ? proposalDetails[6].toString() : '区块无效'}</div>
-              <div><strong>已执行:</strong> {proposalDetails[7] ? '是' : '否'}</div>
-              <div><strong>已取消:</strong> {proposalDetails[8] ? '是' : '否'}</div>
+              <div><strong>投票开始区块:</strong> {proposalDetails && proposalDetails[1] > 0 ? proposalDetails[1].toString() : '区块无效'}</div>
+              <div><strong>投票结束区块:</strong> {proposalDetails && proposalDetails[2] > 0 ? proposalDetails[2].toString() : '区块无效'}</div>
+              <div><strong>已执行:</strong> {proposalDetails[3] ? '是' : '否'}</div>
+              <div><strong>已取消:</strong> {proposalDetails[4] ? '是' : '否'}</div>
+              <div><strong>赞成票:</strong> {proposalDetails && proposalDetails[5] > 0 ? parseFloat(formatEther(proposalDetails[5])).toFixed(2) : '0'}</div>
+              <div><strong>反对票:</strong> {proposalDetails && proposalDetails[6] > 0 ? parseFloat(formatEther(proposalDetails[6])).toFixed(2) : '0'}</div>
+              <div><strong>弃权票:</strong> {proposalDetails && proposalDetails[7] > 0 ? parseFloat(formatEther(proposalDetails[7])).toFixed(2) : '0'}</div>
+              <div><strong>创建时间:</strong> {proposalDetails && proposalDetails[8] > 0 ? new Date(Number(proposalDetails[8]) * 1000).toLocaleString() : '未知'}</div>
+              <div><strong>额外信息:</strong> {proposalDetails[9] || '无'}</div>
             </div>
           )}
         </CardContent>
@@ -189,13 +191,13 @@ export default function ProposalVoteVerifier() {
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div className="text-center">
                 <div className="text-2xl font-bold text-green-600">
-                  {parseFloat(formatEther(proposalVotes[0])).toFixed(2)}
+                  {parseFloat(formatEther(proposalVotes[1])).toFixed(2)}
                 </div>
                 <div className="text-sm text-gray-600">赞成票</div>
               </div>
               <div className="text-center">
                 <div className="text-2xl font-bold text-red-600">
-                  {parseFloat(formatEther(proposalVotes[1])).toFixed(2)}
+                  {parseFloat(formatEther(proposalVotes[0])).toFixed(2)}
                 </div>
                 <div className="text-sm text-gray-600">反对票</div>
               </div>

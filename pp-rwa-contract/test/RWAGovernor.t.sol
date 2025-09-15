@@ -156,7 +156,7 @@ contract RWAGovernorTest is Test {
     }
     
     function testGetProposalDetails() public {
-        // 测试提案详情获取功能（向后兼容性）
+        // 测试提案详情获取功能（向后兼容性 - 现在返回空数组和空字符串）
         vm.startPrank(owner);
 
         // 给owner足够的代币
@@ -189,20 +189,22 @@ contract RWAGovernorTest is Test {
             uint256 abstainVotes
         ) = governor.getProposalDetails(proposalId);
 
-        // 验证提案详情
+        // 验证提案详情 - 现在这些数据通过OpenZeppelin标准函数获取
         assertEq(proposer, owner);
-        assertEq(proposalTargets.length, 1);
-        assertEq(proposalTargets[0], address(token));
-        assertEq(proposalValues.length, 1);
-        assertEq(proposalValues[0], 100);
-        assertEq(proposalCalldatas.length, 1);
-        assertEq(proposalCalldatas[0], hex"1234");
-        assertEq(proposalDescription, description);
+        assertTrue(voteStart > 0);
+        assertTrue(voteEnd > voteStart);
         assertEq(executed, false);
         assertEq(canceled, false);
         assertEq(forVotes, 0);
         assertEq(againstVotes, 0);
         assertEq(abstainVotes, 0);
+
+        // targets、values、calldatas、description 现在返回空数组/字符串
+        // 这些数据应该通过事件获取，而不是存储
+        assertEq(proposalTargets.length, 0);
+        assertEq(proposalValues.length, 0);
+        assertEq(proposalCalldatas.length, 0);
+        assertEq(proposalDescription, "");
 
         // 验证投票时间设置正确
         assertTrue(voteStart > 0);
@@ -232,20 +234,18 @@ contract RWAGovernorTest is Test {
         // 获取提案基本信息
         (
             address proposer,
-            string memory proposalDescription,
-            uint256 voteStart,
-            uint256 voteEnd,
-            bool executed,
-            bool canceled
+            uint256 createdAt,
+            string memory extraInfo
         ) = governor.getProposalBasicInfo(proposalId);
 
         // 验证基本信息
         assertEq(proposer, owner);
-        assertEq(proposalDescription, description);
-        assertEq(executed, false);
-        assertEq(canceled, false);
+        assertTrue(createdAt > 0);
+        assertEq(extraInfo, "");
 
-        // 验证投票时间设置正确
+        // 验证投票时间设置正确（使用OpenZeppelin标准函数）
+        uint256 voteStart = governor.proposalSnapshot(proposalId);
+        uint256 voteEnd = governor.proposalDeadline(proposalId);
         assertTrue(voteStart > 0);
         assertTrue(voteEnd > voteStart);
 
@@ -285,8 +285,8 @@ contract RWAGovernorTest is Test {
         vm.stopPrank();
     }
 
-    function testGetProposalActions() public {
-        // 测试提案执行参数获取功能
+    function testGetProposalFullInfo() public {
+        // 测试提案完整信息获取功能
         vm.startPrank(owner);
 
         // 给owner足够的代币
@@ -296,33 +296,44 @@ contract RWAGovernorTest is Test {
         address[] memory targets = new address[](1);
         targets[0] = address(token);
         uint256[] memory values = new uint256[](1);
-        values[0] = 100;
+        values[0] = 0;
         bytes[] memory calldatas = new bytes[](1);
-        calldatas[0] = hex"5678";
-        string memory description = "Actions Test Proposal";
+        calldatas[0] = hex"";
+        string memory description = "Full Info Test Proposal";
 
         uint256 proposalId = governor.propose(targets, values, calldatas, description);
 
-        // 获取提案执行参数
+        // 获取提案完整信息
         (
-            address[] memory proposalTargets,
-            uint256[] memory proposalValues,
-            bytes[] memory proposalCalldatas
-        ) = governor.getProposalActions(proposalId);
+            address proposer,
+            uint256 voteStart,
+            uint256 voteEnd,
+            bool executed,
+            bool canceled,
+            uint256 forVotes,
+            uint256 againstVotes,
+            uint256 abstainVotes,
+            uint256 createdAt,
+            string memory extraInfo
+        ) = governor.getProposalFullInfo(proposalId);
 
-        // 验证执行参数
-        assertEq(proposalTargets.length, 1);
-        assertEq(proposalTargets[0], address(token));
-        assertEq(proposalValues.length, 1);
-        assertEq(proposalValues[0], 100);
-        assertEq(proposalCalldatas.length, 1);
-        assertEq(proposalCalldatas[0], hex"5678");
+        // 验证基本信息
+        assertEq(proposer, owner);
+        assertTrue(voteStart > 0);
+        assertTrue(voteEnd > voteStart);
+        assertEq(executed, false);
+        assertEq(canceled, false);
+        assertEq(forVotes, 0);
+        assertEq(againstVotes, 0);
+        assertEq(abstainVotes, 0);
+        assertTrue(createdAt > 0);
+        assertEq(extraInfo, "");
 
         vm.stopPrank();
     }
 
-    function testSeparatedFunctionsConsistency() public {
-        // 测试分离函数与原始函数的数据一致性
+    function testFullInfoFunctionsConsistency() public {
+        // 测试完整信息函数与OpenZeppelin标准函数的数据一致性
         vm.startPrank(owner);
 
         // 给owner足够的代币
@@ -332,124 +343,51 @@ contract RWAGovernorTest is Test {
         address[] memory targets = new address[](1);
         targets[0] = address(token);
         uint256[] memory values = new uint256[](1);
-        values[0] = 200;
+        values[0] = 0;
         bytes[] memory calldatas = new bytes[](1);
-        calldatas[0] = hex"9abc";
+        calldatas[0] = hex"";
         string memory description = "Consistency Test Proposal";
 
         uint256 proposalId = governor.propose(targets, values, calldatas, description);
 
-        // 使用分离函数获取数据 - 验证基本信息
-        _testBasicInfoConsistency(proposalId);
+        // 使用完整信息函数获取数据
+        (
+            address proposer,
+            uint256 voteStart,
+            uint256 voteEnd,
+            bool executed,
+            bool canceled,
+            uint256 forVotes,
+            uint256 againstVotes,
+            uint256 abstainVotes,
+            uint256 createdAt,
+            string memory extraInfo
+        ) = governor.getProposalFullInfo(proposalId);
 
-        // 使用分离函数获取数据 - 验证投票信息
-        _testVotesConsistency(proposalId);
+        // 使用OpenZeppelin标准函数获取数据进行验证
+        assertEq(proposer, governor.proposalProposer(proposalId));
+        assertEq(voteStart, governor.proposalSnapshot(proposalId));
+        assertEq(voteEnd, governor.proposalDeadline(proposalId));
 
-        // 使用分离函数获取数据 - 验证执行参数
-        _testActionsConsistency(proposalId);
+        // 验证状态 - 使用数值比较 (Executed=7, Canceled=2)
+        uint256 stateValue = uint256(governor.state(proposalId));
+        assertEq(executed, (stateValue == 7));  // Executed
+        assertEq(canceled, (stateValue == 2));  // Canceled
+
+        // 验证投票数据
+        (uint256 ozAgainstVotes, uint256 ozForVotes, uint256 ozAbstainVotes) = governor.proposalVotes(proposalId);
+        assertEq(forVotes, ozForVotes);
+        assertEq(againstVotes, ozAgainstVotes);
+        assertEq(abstainVotes, ozAbstainVotes);
+
+        // 验证元数据
+        assertTrue(createdAt > 0);
+        assertEq(extraInfo, "");
 
         vm.stopPrank();
     }
 
-    function _testBasicInfoConsistency(uint256 proposalId) internal {
-        // 使用分离函数获取数据
-        (
-            address proposer1,
-            string memory description1,
-            uint256 voteStart1,
-            uint256 voteEnd1,
-            bool executed1,
-            bool canceled1
-        ) = governor.getProposalBasicInfo(proposalId);
-
-        // 使用原始函数获取数据
-        (
-            address proposer2,
-            ,
-            ,
-            ,
-            string memory description2,
-            uint256 voteStart2,
-            uint256 voteEnd2,
-            bool executed2,
-            bool canceled2,
-            ,
-            ,
-
-        ) = governor.getProposalDetails(proposalId);
-
-        // 验证数据一致性
-        assertEq(proposer1, proposer2);
-        assertEq(description1, description2);
-        assertEq(voteStart1, voteStart2);
-        assertEq(voteEnd1, voteEnd2);
-        assertEq(executed1, executed2);
-        assertEq(canceled1, canceled2);
-    }
-
-    function _testVotesConsistency(uint256 proposalId) internal {
-        // 使用分离函数获取数据
-        (
-            uint256 forVotes1,
-            uint256 againstVotes1,
-            uint256 abstainVotes1
-        ) = governor.getProposalVotes(proposalId);
-
-        // 使用原始函数获取数据
-        (
-            ,
-            ,
-            ,
-            ,
-            ,
-            ,
-            ,
-            ,
-            ,
-            uint256 forVotes2,
-            uint256 againstVotes2,
-            uint256 abstainVotes2
-        ) = governor.getProposalDetails(proposalId);
-
-        // 验证数据一致性
-        assertEq(forVotes1, forVotes2);
-        assertEq(againstVotes1, againstVotes2);
-        assertEq(abstainVotes1, abstainVotes2);
-    }
-
-    function _testActionsConsistency(uint256 proposalId) internal {
-        // 使用分离函数获取数据
-        (
-            address[] memory targets1,
-            uint256[] memory values1,
-            bytes[] memory calldatas1
-        ) = governor.getProposalActions(proposalId);
-
-        // 使用原始函数获取数据
-        (
-            ,
-            address[] memory targets2,
-            uint256[] memory values2,
-            bytes[] memory calldatas2,
-            ,
-            ,
-            ,
-            ,
-            ,
-            ,
-            ,
-
-        ) = governor.getProposalDetails(proposalId);
-
-        // 验证数据一致性
-        assertEq(targets1.length, targets2.length);
-        assertEq(targets1[0], targets2[0]);
-        assertEq(values1.length, values2.length);
-        assertEq(values1[0], values2[0]);
-        assertEq(calldatas1.length, calldatas2.length);
-        assertEq(calldatas1[0], calldatas2[0]);
-    }
-    
+        
     function testGetProposalStateString() public {
         // 测试提案状态字符串获取功能
         vm.startPrank(owner);

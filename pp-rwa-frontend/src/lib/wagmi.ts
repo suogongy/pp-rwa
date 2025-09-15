@@ -2298,9 +2298,33 @@ export const RWAGovernor_ABI = [
         "type": "address"
       },
       {
+        "internalType": "uint256",
+        "name": "createdAt",
+        "type": "uint256"
+      },
+      {
         "internalType": "string",
-        "name": "description",
+        "name": "extraInfo",
         "type": "string"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "proposalId",
+        "type": "uint256"
+      }
+    ],
+    "name": "getProposalFullInfo",
+    "outputs": [
+      {
+        "internalType": "address",
+        "name": "proposer",
+        "type": "address"
       },
       {
         "internalType": "uint256",
@@ -2321,6 +2345,31 @@ export const RWAGovernor_ABI = [
         "internalType": "bool",
         "name": "canceled",
         "type": "bool"
+      },
+      {
+        "internalType": "uint256",
+        "name": "forVotes",
+        "type": "uint256"
+      },
+      {
+        "internalType": "uint256",
+        "name": "againstVotes",
+        "type": "uint256"
+      },
+      {
+        "internalType": "uint256",
+        "name": "abstainVotes",
+        "type": "uint256"
+      },
+      {
+        "internalType": "uint256",
+        "name": "createdAt",
+        "type": "uint256"
+      },
+      {
+        "internalType": "string",
+        "name": "extraInfo",
+        "type": "string"
       }
     ],
     "stateMutability": "view",
