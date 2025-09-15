@@ -1,7 +1,15 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { useAccount, useReadContract, useWriteContract, useWaitForTransactionReceipt, getPublicClient } from 'wagmi'
+
+// 错误类型定义
+interface ContractError {
+  code?: number
+  data?: unknown
+  message?: string
+  stack?: string
+}
+import { useReadContract, useWriteContract, useWaitForTransactionReceipt, usePublicClient } from 'wagmi'
 import { RWAGovernor_ADDRESS, RWAGovernor_ABI } from '@/lib/wagmi'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -41,6 +49,7 @@ export function GovernanceManagement({ address }: { address: string }) {
 
   const { writeContract, isPending, data: hash } = useWriteContract()
   const { isLoading: isConfirming, isSuccess: isConfirmed } = useWaitForTransactionReceipt({ hash })
+  const publicClient = usePublicClient()
 
   // 读取提案总数
   const { data: proposalCount } = useReadContract({
@@ -118,60 +127,237 @@ export function GovernanceManagement({ address }: { address: string }) {
     functionName: 'quorumNumerator',
   })
 
-  // 创建动态获取提案状态的函数 - 简化版本
+  // 创建动态获取提案状态的函数 - 调用智能合约
   const getProposalState = async (proposalId: bigint) => {
     try {
-      // 根据提案ID和时间计算一个合理的状态
-      const currentTime = Math.floor(Date.now() / 1000)
-      const proposalStart = currentTime - 86400 // 假设24小时前开始
-      const proposalEnd = currentTime + 86400   // 假设24小时后结束
-      
-      // 根据当前时间和投票时间计算状态
-      if (currentTime < proposalStart) {
+      console.log(`🔍 获取提案 ${proposalId.toString()} 状态...`)
+
+      // 优先使用合约的 state 方法，这是最可靠的方式
+      try {
+        const state = await publicClient.readContract({
+          address: RWAGovernor_ADDRESS,
+          abi: RWAGovernor_ABI,
+          functionName: 'state',
+          args: [proposalId],
+        }) as bigint
+
+        console.log(`✅ 通过合约state方法获取到提案 ${proposalId.toString()} 状态: ${getProposalStateStringFromEnum(state)} (${state.toString()})`)
+        return state
+      } catch (stateError) {
+        console.warn(`合约state方法失败，尝试getProposalBasicInfo:`, stateError)
+      }
+
+      // 备用方案：通过 getProposalBasicInfo 获取状态
+      const proposalData = await publicClient.readContract({
+        address: RWAGovernor_ADDRESS,
+        abi: RWAGovernor_ABI,
+        functionName: 'getProposalBasicInfo',
+        args: [proposalId],
+      }) as [
+        string, // proposer
+        string, // description
+        bigint, // voteStart
+        bigint, // voteEnd
+        boolean, // executed
+        boolean, // canceled,
+      ]
+
+      const proposer = proposalData[0]
+      const voteStart = proposalData[2]
+      const voteEnd = proposalData[3]
+      const executed = proposalData[4]
+      const canceled = proposalData[5]
+
+      // 获取当前区块时间而不是本地时间
+      const currentBlock = await publicClient.getBlock()
+      const currentTime = currentBlock.timestamp
+
+      console.log(`提案 ${proposalId.toString()} 详细信息:`, {
+        proposer,
+        voteStart: voteStart.toString(),
+        voteEnd: voteEnd.toString(),
+        voteStartDate: voteStart > 0 ? new Date(Number(voteStart) * 1000).toLocaleString() : 'Invalid',
+        voteEndDate: voteEnd > 0 ? new Date(Number(voteEnd) * 1000).toLocaleString() : 'Invalid',
+        currentTime: new Date(Number(currentTime) * 1000).toLocaleString(),
+        currentBlock: currentBlock.number,
+        executed,
+        canceled,
+      })
+
+      // 检查时间戳是否有效
+      if (voteStart === BigInt(0) || voteEnd === BigInt(0)) {
+        console.warn(`提案 ${proposalId.toString()} 时间戳无效，提案可能不存在`)
+        return BigInt(8) // Unknown状态
+      }
+
+      // 基于OZ Governor的状态逻辑，使用区块时间
+      if (canceled) {
+        return BigInt(2) // Canceled
+      } else if (executed) {
+        return BigInt(7) // Executed
+      } else if (currentTime < voteStart) {
         return BigInt(0) // Pending
-      } else if (currentTime <= proposalEnd) {
+      } else if (currentTime <= voteEnd) {
         return BigInt(1) // Active
       } else {
-        return BigInt(3) // Defeated (默认状态)
+        // 投票已结束，需要检查是否成功达到法定人数
+        // 简化处理，返回 Defeated
+        console.log(`提案 ${proposalId.toString()} 投票已结束`)
+        return BigInt(3) // Defeated
       }
     } catch (error) {
-      console.error('获取提案状态失败:', error)
-      return BigInt(0) // 默认返回 Pending 状态
+      console.error(`获取提案 ${proposalId.toString()} 状态失败:`, error)
+
+      // 最后的备用方案：假设提案不存在
+      return BigInt(8) // Unknown状态
     }
   }
   
-  // 获取提案详情的辅助函数 - 简化版本
+  // 获取提案详情的辅助函数 - 使用优化后的分离函数调用
   const getProposalDetails = async (proposalId: bigint): Promise<Proposal | null> => {
     try {
       console.log(`🔍 获取提案 ${proposalId.toString()} 详情...`)
-      
+
+      let proposer: string, description: string, voteStart: bigint, voteEnd: bigint, executed: boolean, canceled: boolean
+      let forVotes: bigint = BigInt(0), againstVotes: bigint = BigInt(0), abstainVotes: bigint = BigInt(0)
+      let targets: string[] = [], values: bigint[] = [], calldatas: string[] = []
+
+      try {
+        // 使用优化后的分离函数调用，避免堆栈溢出
+        [
+          proposer,
+          description,
+          voteStart,
+          voteEnd,
+          executed,
+          canceled,
+        ] = await publicClient.readContract({
+          address: RWAGovernor_ADDRESS,
+          abi: RWAGovernor_ABI,
+          functionName: 'getProposalBasicInfo',
+          args: [proposalId],
+        }) as [
+          string, // proposer
+          string, // description
+          bigint, // voteStart
+          bigint, // voteEnd
+          boolean, // executed
+          boolean, // canceled
+        ]
+      } catch (basicInfoError) {
+        console.warn(`⚠️ 获取提案基本信息失败: ${basicInfoError}`)
+        // 设置默认值
+        proposer = '0x0000000000000000000000000000000000000000'
+        description = '提案信息不可用'
+        voteStart = BigInt(0)
+        voteEnd = BigInt(0)
+        executed = false
+        canceled = false
+      }
+
+      try {
+        [
+          forVotes,
+          againstVotes,
+          abstainVotes,
+        ] = await publicClient.readContract({
+          address: RWAGovernor_ADDRESS,
+          abi: RWAGovernor_ABI,
+          functionName: 'getProposalVotes',
+          args: [proposalId],
+        }) as [
+          bigint, // forVotes
+          bigint, // againstVotes
+          bigint, // abstainVotes
+        ]
+      } catch (votesError) {
+        console.warn(`⚠️ 获取提案投票信息失败: ${votesError}`)
+        // 保持默认值 0
+      }
+
+      try {
+        [
+          targets,
+          values,
+          calldatas,
+        ] = await publicClient.readContract({
+          address: RWAGovernor_ADDRESS,
+          abi: RWAGovernor_ABI,
+          functionName: 'getProposalActions',
+          args: [proposalId],
+        }) as [
+          string[], // targets
+          bigint[], // values
+          string[], // calldatas
+        ]
+      } catch (actionsError) {
+        console.warn(`⚠️ 获取提案执行参数失败: ${actionsError}`)
+        // 保持默认空数组
+      }
+
       // 获取提案状态
       const state = await getProposalState(proposalId)
-      
-      // 创建一个模拟的提案对象，基于提案ID
-      const mockProposal: Proposal = {
+
+      // 检查时间戳是否有效
+      const isValidTimestamp = voteStart > BigInt(0) && voteEnd > BigInt(0)
+
+      // 创建提案对象
+      const proposal: Proposal = {
         id: proposalId,
-        proposer: '0x0000000000000000000000000000000000000000',
-        description: '提案详情获取中...',
-        voteStart: BigInt(Math.floor(Date.now() / 1000) - 86400), // 24小时前
-        voteEnd: BigInt(Math.floor(Date.now() / 1000) + 86400),   // 24小时后
-        executed: false,
-        canceled: false,
-        forVotes: BigInt(0),
-        againstVotes: BigInt(0),
-        abstainVotes: BigInt(0),
-        state: state !== null ? getProposalStateStringFromEnum(BigInt(state.toString())) : 'Unknown',
-        targets: [],
-        values: [],
-        calldatas: []
+        proposer,
+        description,
+        voteStart: isValidTimestamp ? voteStart : BigInt(Math.floor(Date.now() / 1000)),
+        voteEnd: isValidTimestamp ? voteEnd : BigInt(Math.floor(Date.now() / 1000) + 86400),
+        executed,
+        canceled,
+        forVotes,
+        againstVotes,
+        abstainVotes,
+        state: getProposalStateStringFromEnum(BigInt(state.toString())),
+        targets,
+        values,
+        calldatas,
       }
-      
-      console.log(`✅ 成功获取提案 ${proposalId.toString()} 状态: ${mockProposal.state}`)
-      return mockProposal
-      
+
+      console.log(`✅ 成功获取提案 ${proposalId.toString()} 详情:`, {
+        proposer: proposal.proposer,
+        description: proposal.description,
+        state: proposal.state,
+        voteStart: isValidTimestamp ? new Date(Number(proposal.voteStart) * 1000).toLocaleString() : 'Invalid timestamp',
+        voteEnd: isValidTimestamp ? new Date(Number(proposal.voteEnd) * 1000).toLocaleString() : 'Invalid timestamp',
+        rawVoteStart: voteStart.toString(),
+        rawVoteEnd: voteEnd.toString(),
+        isValidTimestamp,
+      })
+
+      return proposal
+
     } catch (error) {
       console.error(`获取提案 ${proposalId.toString()} 详情失败:`, error)
-      return null
+
+      // 如果获取详情失败，返回一个基础的提案对象，显示错误信息
+      try {
+        const state = await getProposalState(proposalId)
+        return {
+          id: proposalId,
+          proposer: '0x0000000000000000000000000000000000000000',
+          description: `提案 ${proposalId.toString()} 详情获取失败 - 可能不存在`,
+          voteStart: BigInt(Math.floor(Date.now() / 1000) - 86400),
+          voteEnd: BigInt(Math.floor(Date.now() / 1000) + 86400),
+          executed: false,
+          canceled: false,
+          forVotes: BigInt(0),
+          againstVotes: BigInt(0),
+          abstainVotes: BigInt(0),
+          state: getProposalStateStringFromEnum(BigInt(state.toString())),
+          targets: [],
+          values: [],
+          calldatas: [],
+        }
+      } catch (stateError) {
+        console.error(`获取提案 ${proposalId.toString()} 状态也失败:`, stateError)
+        return null
+      }
     }
   }
 
@@ -179,13 +365,14 @@ export function GovernanceManagement({ address }: { address: string }) {
   const getProposalStateStringFromEnum = (state: bigint): string => {
     const stateMap: { [key: number]: string } = {
       0: 'Pending',
-      1: 'Active', 
+      1: 'Active',
       2: 'Canceled',
       3: 'Defeated',
       4: 'Succeeded',
       5: 'Queued',
       6: 'Expired',
-      7: 'Executed'
+      7: 'Executed',
+      8: 'Unknown'
     }
     return stateMap[Number(state)] || 'Unknown'
   }
@@ -257,6 +444,14 @@ export function GovernanceManagement({ address }: { address: string }) {
     return () => clearInterval(interval)
   }, [allProposalIds])
 
+  // 监听交易完成，刷新提案数据
+  useEffect(() => {
+    if (isConfirmed && hash) {
+      console.log('交易已确认，刷新提案数据...')
+      refreshProposals()
+    }
+  }, [isConfirmed, hash])
+
   // 创建提案
   const handleCreateProposal = async () => {
     if (!newProposalDescription || !newProposalTarget) {
@@ -283,7 +478,7 @@ export function GovernanceManagement({ address }: { address: string }) {
       console.log('提案参数:', proposalArgs)
       
       writeContract({
-        address: RWAGovernor_ADDRESS,
+        address: RWAGovernor_ADDRESS as `0x${string}`,
         abi: RWAGovernor_ABI,
         functionName: 'propose',
         args: proposalArgs,
@@ -296,18 +491,32 @@ export function GovernanceManagement({ address }: { address: string }) {
       console.error('错误详情:', {
         message: error instanceof Error ? error.message : '未知错误',
         stack: error instanceof Error ? error.stack : '无堆栈信息',
-        code: (error as any)?.code,
-        data: (error as any)?.data
+        code: (error as ContractError)?.code,
+        data: (error as ContractError)?.data
       })
     }
   }
 
   // 投票
   const handleVote = async (proposalId: bigint, support: number) => {
+    // 检查是否有待处理的交易
+    if (isPending || isConfirming) {
+      console.warn('已有交易正在处理中，请等待完成')
+      return
+    }
+
+    // 检查投票权限
+    if (!currentVotes || currentVotes === BigInt(0)) {
+      console.warn('投票失败: 没有激活的投票权')
+      alert('您需要先自我委托以激活投票权才能投票')
+      return
+    }
+
     console.log('开始为提案投票:')
     console.log('  提案ID:', proposalId.toString())
     console.log('  投票类型:', support === 0 ? '反对' : support === 1 ? '赞成' : support === 2 ? '弃权' : '未知')
     console.log('  投票者:', address)
+    console.log('  投票权重:', currentVotes.toString())
     console.log('  投票理由:', voteReason || '无')
     console.log('  合约地址:', RWAGovernor_ADDRESS)
 
@@ -337,8 +546,8 @@ export function GovernanceManagement({ address }: { address: string }) {
       console.error('错误详情:', {
         message: error instanceof Error ? error.message : '未知错误',
         stack: error instanceof Error ? error.stack : '无堆栈信息',
-        code: (error as any)?.code,
-        data: (error as any)?.data
+        code: (error as ContractError)?.code,
+        data: (error as ContractError)?.data
       })
     }
   }
@@ -453,7 +662,8 @@ export function GovernanceManagement({ address }: { address: string }) {
       case 'Defeated': return 'bg-red-500'
       case 'Canceled': return 'bg-gray-500'
       case 'Expired': return 'bg-orange-500'
-      default: return 'bg-gray-500'
+      case 'Unknown': return 'bg-gray-400'
+      default: return 'bg-gray-400'
     }
   }
 
@@ -518,10 +728,10 @@ export function GovernanceManagement({ address }: { address: string }) {
             stateMutability: 'nonpayable',
             type: 'function',
           },
-        ],
+        ] as const,
         functionName: 'delegate',
         args: [delegateAddress as `0x${string}`],
-      })
+      } as any)
       
       console.log('委托投票交易已发送到区块链，等待确认...')
       
@@ -552,10 +762,10 @@ export function GovernanceManagement({ address }: { address: string }) {
             stateMutability: 'nonpayable',
             type: 'function',
           },
-        ],
+        ] as const,
         functionName: 'delegate',
         args: [address as `0x${string}`],
-      })
+      } as any)
       
       console.log('自我委托交易已发送到区块链，等待确认...')
       
@@ -819,7 +1029,8 @@ export function GovernanceManagement({ address }: { address: string }) {
                       size="sm"
                       variant="outline"
                       onClick={() => handleVote(proposal.id, 1)} // 赞成
-                      disabled={proposal.executed || proposal.canceled || proposal.state !== 'Active'}
+                      disabled={proposal.executed || proposal.canceled || proposal.state !== 'Active' || !currentVotes || currentVotes === BigInt(0)}
+                      title={!currentVotes || currentVotes === BigInt(0) ? "需要先自我委托激活投票权" : undefined}
                     >
                       赞成
                     </Button>
@@ -827,7 +1038,8 @@ export function GovernanceManagement({ address }: { address: string }) {
                       size="sm"
                       variant="outline"
                       onClick={() => handleVote(proposal.id, 0)} // 反对
-                      disabled={proposal.executed || proposal.canceled || proposal.state !== 'Active'}
+                      disabled={proposal.executed || proposal.canceled || proposal.state !== 'Active' || !currentVotes || currentVotes === BigInt(0)}
+                      title={!currentVotes || currentVotes === BigInt(0) ? "需要先自我委托激活投票权" : undefined}
                     >
                       反对
                     </Button>
@@ -835,10 +1047,18 @@ export function GovernanceManagement({ address }: { address: string }) {
                       size="sm"
                       variant="outline"
                       onClick={() => handleVote(proposal.id, 2)} // 弃权
-                      disabled={proposal.executed || proposal.canceled || proposal.state !== 'Active'}
+                      disabled={proposal.executed || proposal.canceled || proposal.state !== 'Active' || !currentVotes || currentVotes === BigInt(0)}
+                      title={!currentVotes || currentVotes === BigInt(0) ? "需要先自我委托激活投票权" : undefined}
                     >
                       弃权
                     </Button>
+                    
+                    {/* 投票权限提示 */}
+                    {proposal.state === 'Active' && (!currentVotes || currentVotes === BigInt(0)) && (
+                      <div className="text-xs text-orange-600 bg-orange-50 px-2 py-1 rounded">
+                        需要自我委托激活投票权
+                      </div>
+                    )}
                     
                     {proposal.state === 'Succeeded' && !proposal.executed && (
                       <Button

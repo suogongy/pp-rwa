@@ -48,7 +48,7 @@ contract RWAGovernor is Governor, GovernorSettings, GovernorCountingSimple, Gove
 
     constructor(IVotes _token, TimelockController _timelock)
         Governor("RWAGovernor")
-        GovernorSettings(1 /* voting delay: 1 block */, 50400 /* voting period: 1 week */, 1000 ether /* proposal threshold */)
+        GovernorSettings(0 /* voting delay: 0 blocks - immediate voting */, 50400 /* voting period: 1 week */, 1000 ether /* proposal threshold */)
         GovernorVotes(_token)
         GovernorVotesQuorumFraction(4) /* 4% quorum */
         GovernorTimelockControl(_timelock)
@@ -239,7 +239,104 @@ contract RWAGovernor is Governor, GovernorSettings, GovernorCountingSimple, Gove
     }
 
     /**
-     * @dev 获取提案详细信息 (改进版)
+     * @dev 获取提案基本信息 (优化版 - 避免堆栈溢出)
+     */
+    function getProposalBasicInfo(uint256 proposalId) external view returns (
+        address proposer,
+        string memory description,
+        uint256 voteStart,
+        uint256 voteEnd,
+        bool executed,
+        bool canceled
+    ) {
+        ProposalDetails storage details = proposalDetails[proposalId];
+
+        // 如果提案不存在或未初始化，使用Governor标准方法获取基本信息
+        if (details.proposer == address(0)) {
+            proposer = address(0);
+            description = "Proposal details not available";
+
+            // 尝试获取投票时间，如果提案不存在则返回默认值
+            try this.proposalSnapshot(proposalId) returns (uint256 snapshot) {
+                voteStart = snapshot;
+                try this.proposalDeadline(proposalId) returns (uint256 deadline) {
+                    voteEnd = deadline;
+                } catch {
+                    voteEnd = 0;
+                }
+            } catch {
+                voteStart = 0;
+                voteEnd = 0;
+            }
+
+            // 设置默认状态
+            executed = false;
+            canceled = false;
+        } else {
+            proposer = details.proposer;
+            description = details.description;
+            voteStart = details.voteStart;
+            voteEnd = details.voteEnd;
+
+            // 获取提案状态
+            try this.state(proposalId) returns (ProposalState proposalState) {
+                executed = (proposalState == ProposalState.Executed);
+                canceled = (proposalState == ProposalState.Canceled);
+            } catch {
+                // 如果无法获取状态，使用存储的状态
+                executed = details.executed;
+                canceled = details.canceled;
+            }
+        }
+    }
+
+    /**
+     * @dev 获取提案投票信息 (分离投票数据以避免堆栈溢出)
+     */
+    function getProposalVotes(uint256 proposalId) external view returns (
+        uint256 forVotes,
+        uint256 againstVotes,
+        uint256 abstainVotes
+    ) {
+        ProposalDetails storage details = proposalDetails[proposalId];
+
+        if (details.proposer != address(0)) {
+            forVotes = details.forVotes;
+            againstVotes = details.againstVotes;
+            abstainVotes = details.abstainVotes;
+        } else {
+            // 如果没有存储数据，设置为0
+            forVotes = 0;
+            againstVotes = 0;
+            abstainVotes = 0;
+        }
+    }
+
+    /**
+     * @dev 获取提案执行参数 (分离执行参数以避免堆栈溢出)
+     */
+    function getProposalActions(uint256 proposalId) external view returns (
+        address[] memory targets,
+        uint256[] memory values,
+        bytes[] memory calldatas
+    ) {
+        ProposalDetails storage details = proposalDetails[proposalId];
+
+        if (details.proposer != address(0)) {
+            targets = details.targets;
+            values = details.values;
+            calldatas = details.calldatas;
+        } else {
+            // 如果没有存储数据，返回空数组
+            targets = new address[](0);
+            values = new uint256[](0);
+            calldatas = new bytes[](0);
+        }
+    }
+
+    /**
+     * @dev 获取提案详细信息 (旧版本 - 保留向后兼容性)
+     * @notice 这个函数由于堆栈限制问题，建议使用上面分离的函数
      */
     function getProposalDetails(uint256 proposalId) external view returns (
         address proposer,
@@ -255,43 +352,27 @@ contract RWAGovernor is Governor, GovernorSettings, GovernorCountingSimple, Gove
         uint256 againstVotes,
         uint256 abstainVotes
     ) {
-        ProposalDetails storage details = proposalDetails[proposalId];
-        
-        // 如果提案不存在或未初始化，使用Governor标准方法获取基本信息
-        if (details.proposer == address(0)) {
-            proposer = address(0); // 无法获取，需要通过事件或其他方式
-            targets = new address[](0);
-            values = new uint256[](0);
-            calldatas = new bytes[](0);
-            description = "Proposal details not available";
-            voteStart = this.proposalSnapshot(proposalId);
-            voteEnd = this.proposalDeadline(proposalId);
-        } else {
-            proposer = details.proposer;
-            targets = details.targets;
-            values = details.values;
-            calldatas = details.calldatas;
-            description = details.description;
-            voteStart = details.voteStart;
-            voteEnd = details.voteEnd;
-        }
-        
-        // 获取提案状态
-        ProposalState proposalState = this.state(proposalId);
-        executed = (proposalState == ProposalState.Executed);
-        canceled = (proposalState == ProposalState.Canceled);
-        
-        // 获取投票计数（如果有存储的数据）
-        if (details.proposer != address(0)) {
-            forVotes = details.forVotes;
-            againstVotes = details.againstVotes;
-            abstainVotes = details.abstainVotes;
-        } else {
-            // 如果没有存储数据，设置为0
-            forVotes = 0;
-            againstVotes = 0;
-            abstainVotes = 0;
-        }
+        // 使用分离的函数来避免堆栈溢出
+        (
+            proposer,
+            description,
+            voteStart,
+            voteEnd,
+            executed,
+            canceled
+        ) = this.getProposalBasicInfo(proposalId);
+
+        (
+            forVotes,
+            againstVotes,
+            abstainVotes
+        ) = this.getProposalVotes(proposalId);
+
+        (
+            targets,
+            values,
+            calldatas
+        ) = this.getProposalActions(proposalId);
     }
     
     /**
