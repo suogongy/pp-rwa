@@ -143,6 +143,11 @@ export default function CounterDemoPage() {
   })
   const [multiInput, setMultiInput] = useState<string>('')
   const [isInitialized, setIsInitialized] = useState<boolean>(false)
+  const [isV2Initialized, setIsV2Initialized] = useState<boolean>(false)
+  const [lastQueryTime, setLastQueryTime] = useState<{count: Date | null, v2Prop: Date | null}>({
+    count: null,
+    v2Prop: null
+  })
 
   // 管理合约地址
   const managementAddress = RWAUpgradeableProxy_ADDRESS || ''
@@ -307,8 +312,12 @@ export default function CounterDemoPage() {
       console.log('👤 owner 更新:', ownerData, '初始化状态:', initialized)
     }
     if (v2PropData !== undefined) {
-      setContractState(prev => ({ ...prev, v2Prop: Number(v2PropData) }))
-      console.log('🔢 v2Prop 更新:', Number(v2PropData))
+      const v2PropValue = Number(v2PropData)
+      setContractState(prev => ({ ...prev, v2Prop: v2PropValue }))
+      // 检查V2是否已初始化（v2Prop不为0）
+      const v2Initialized = v2PropValue > 0
+      setIsV2Initialized(v2Initialized)
+      console.log('🔢 v2Prop 更新:', v2PropValue, 'V2初始化状态:', v2Initialized)
     }
   }, [countData, ownerData, v2PropData])
 
@@ -345,8 +354,30 @@ export default function CounterDemoPage() {
   // 具体的调用函数
   const handleInitialize = () => callContractFunction('initialize')
   const handleInitializeV2 = () => callContractFunction('initializeV2')
-  const handleGetCount = () => refetchCount()
-  const handleGetV2Prop = () => refetchV2Prop()
+  const handleGetCount = () => {
+    console.log('🔍 handleGetCount 被调用')
+    console.log('🔍 当前状态:', {
+      targetProxyAddress,
+      currentVersion,
+      isInitialized,
+      availableABILength: availableABI.length,
+      countData
+    })
+    setLastQueryTime(prev => ({ ...prev, count: new Date() }))
+    refetchCount()
+  }
+  const handleGetV2Prop = () => {
+    console.log('🔍 handleGetV2Prop 被调用')
+    console.log('🔍 当前状态:', {
+      targetProxyAddress,
+      currentVersion,
+      isInitialized,
+      availableABILength: availableABI.length,
+      v2PropData
+    })
+    setLastQueryTime(prev => ({ ...prev, v2Prop: new Date() }))
+    refetchV2Prop()
+  }
   const handleNext = () => callContractFunction('next')
   const handleMulti = () => {
     console.log('🚀 handleMulti 被调用, multiInput:', multiInput)
@@ -374,6 +405,8 @@ export default function CounterDemoPage() {
       refetchV2Prop()
       refetchVersionHistory()
       refetchCurrentVersion()
+      // 重置V2初始化状态，等待新的v2Prop数据
+      setIsV2Initialized(false)
     }
   }, [isConfirmed, hash, refetchCount, refetchOwner, refetchV2Prop, refetchVersionHistory, refetchCurrentVersion])
 
@@ -657,69 +690,143 @@ export default function CounterDemoPage() {
                                 {currentVersion >= 2 && (
                                   <Button
                                     onClick={handleInitializeV2}
-                                    disabled={!targetProxyAddress || isPending || !isInitialized}
-                                    variant="outline"
+                                    disabled={!targetProxyAddress || isPending || !isInitialized || isV2Initialized}
+                                    variant={isV2Initialized ? "outline" : "default"}
                                   >
-                                    initializeV2()
+                                    {isV2Initialized ? '✅ V2已初始化' : 'initializeV2()'}
                                   </Button>
                                 )}
                               </div>
                               <div className="text-xs text-gray-500 mt-2">
-                                初始化函数仅在未初始化时可调用
+                                基础初始化后才能调用V2初始化，V2初始化后v2Prop值将大于0
                               </div>
                             </div>
 
                             {/* 查询功能 */}
                             <div>
-                              <h4 className="font-semibold mb-3">查询功能</h4>
-                              <div className="grid grid-cols-2 gap-4">
+                              <h4 className="font-semibold mb-4">查询功能</h4>
+
+                              {/* getCount() 行 */}
+                              <div className="flex items-center justify-between p-4 bg-blue-50 rounded-lg mb-3">
                                 <Button
                                   variant="outline"
                                   onClick={handleGetCount}
-                                  disabled={!targetProxyAddress || !isInitialized}
+                                  disabled={!targetProxyAddress || currentVersion === 0}
                                 >
                                   getCount()
                                 </Button>
-                                {currentVersion >= 2 && (
+                                <div className="flex-1 ml-4">
+                                  <div className="text-sm text-gray-600 mb-1">查询结果:</div>
+                                  <div className="text-xl font-bold text-blue-600">
+                                    {countData !== undefined ? Number(countData) : '--'}
+                                  </div>
+                                  {lastQueryTime.count && (
+                                    <div className="text-xs text-gray-500 mt-1">
+                                      {lastQueryTime.count.toLocaleTimeString()}
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+
+                              {/* getV2Prop() 行 */}
+                              {currentVersion >= 2 && (
+                                <div className="flex items-center justify-between p-4 bg-green-50 rounded-lg">
                                   <Button
                                     variant="outline"
                                     onClick={handleGetV2Prop}
-                                    disabled={!targetProxyAddress || !isInitialized}
+                                    disabled={!targetProxyAddress || currentVersion === 0}
                                   >
                                     getV2Prop()
                                   </Button>
-                                )}
-                              </div>
+                                  <div className="flex-1 ml-4">
+                                    <div className="text-sm text-gray-600 mb-1">查询结果:</div>
+                                    <div className="text-xl font-bold text-green-600">
+                                      {v2PropData !== undefined ? Number(v2PropData) : '--'}
+                                    </div>
+                                    {lastQueryTime.v2Prop && (
+                                      <div className="text-xs text-gray-500 mt-1">
+                                        {lastQueryTime.v2Prop.toLocaleTimeString()}
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
+                              )}
+
+                              {/* 版本提示 */}
+                              {currentVersion < 2 && (
+                                <div className="mt-3 p-3 bg-yellow-50 rounded-lg border border-yellow-200">
+                                  <div className="text-sm text-yellow-800">
+                                    💡 当前版本 V{currentVersion} 不支持 getV2Prop() 功能，升级到 V2 版本后可用
+                                  </div>
+                                </div>
+                              )}
                             </div>
 
                             {/* 操作功能 */}
                             <div>
-                              <h4 className="font-semibold mb-3">操作功能</h4>
-                              <div className="grid grid-cols-2 gap-4 mb-4">
+                              <h4 className="font-semibold mb-4">操作功能</h4>
+
+                              {/* next() 功能行 */}
+                              <div className="flex items-center justify-between p-4 bg-purple-50 rounded-lg mb-3">
                                 <Button
                                   onClick={handleNext}
                                   disabled={!targetProxyAddress || isPending || !isInitialized}
+                                  className="min-w-[200px]"
                                 >
                                   {currentVersion === 1 ? 'next() - 计数器+1' : 'next() - 计数器+2'}
                                 </Button>
-                                {currentVersion >= 2 && (
-                                  <div className="flex items-center space-x-2">
-                                    <Input
-                                      placeholder="乘数"
-                                      value={multiInput}
-                                      onChange={(e) => setMultiInput(e.target.value)}
-                                      className="flex-1"
-                                      disabled={!targetProxyAddress || isPending || !isInitialized}
-                                    />
+                                <div className="flex-1 ml-4">
+                                  <div className="text-sm text-gray-600 mb-1">功能说明:</div>
+                                  <div className="text-sm font-medium text-purple-700">
+                                    {currentVersion === 1
+                                      ? '调用计数器加1操作 (V1版本功能)'
+                                      : '调用计数器加2操作 (V2版本增强功能)'
+                                    }
+                                  </div>
+                                </div>
+                              </div>
+
+                              {/* multi() 功能行 */}
+                              {currentVersion >= 2 && (
+                                <div className="flex items-center justify-between p-4 bg-orange-50 rounded-lg">
+                                  <div className="flex items-center space-x-2 min-w-[280px]">
+                                    <div className="flex-1">
+                                      <Input
+                                        placeholder="输入乘数 (如: 2, 3, 5)"
+                                        value={multiInput}
+                                        onChange={(e) => setMultiInput(e.target.value)}
+                                        className="w-full"
+                                        disabled={!targetProxyAddress || isPending || !isInitialized}
+                                      />
+                                      <div className="text-xs text-gray-500 mt-1">
+                                        请输入大于0的整数
+                                      </div>
+                                    </div>
                                     <Button
                                       onClick={handleMulti}
                                       disabled={!targetProxyAddress || isPending || !isInitialized || !multiInput}
+                                      className="whitespace-nowrap"
                                     >
                                       multi()
                                     </Button>
                                   </div>
-                                )}
-                              </div>
+                                  <div className="flex-1 ml-4">
+                                    <div className="text-sm text-gray-600 mb-1">功能说明:</div>
+                                    <div className="text-sm font-medium text-orange-700">
+                                      将当前计数器值乘以指定倍数 (V2版本专属功能)
+                                    </div>
+                                  </div>
+                                </div>
+                              )}
+
+                              {/* 版本提示 */}
+                              {currentVersion < 2 && (
+                                <div className="mt-3 p-3 bg-blue-50 rounded-lg border border-blue-200">
+                                  <div className="text-sm text-blue-800">
+                                    💡 当前版本 V{currentVersion} 不支持 multi() 功能，升级到 V2 版本后可用
+                                  </div>
+                                </div>
+                              )}
                             </div>
 
                             {/* 当前版本信息 */}
