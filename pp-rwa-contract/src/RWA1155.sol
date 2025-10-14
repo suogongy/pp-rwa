@@ -3,6 +3,9 @@ pragma solidity ^0.8.19;
 
 import "@openzeppelin/contracts/token/ERC1155/ERC1155.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
+import "@openzeppelin/contracts/token/ERC1155/extensions/ERC1155Burnable.sol";
+import "@openzeppelin/contracts/token/ERC1155/extensions/ERC1155Pausable.sol";
+import "@openzeppelin/contracts/token/ERC1155/extensions/ERC1155Supply.sol";
 
 /**
  * @title RWA1155
@@ -12,8 +15,11 @@ import "@openzeppelin/contracts/access/Ownable.sol";
  * - 批量转账和批量铸造
  * - 白名单控制
  * - URI管理
+ * - 暂停功能
+ * - 销毁功能
+ * - 供应量跟踪
  */
-contract RWA1155 is ERC1155, Ownable {
+contract RWA1155 is ERC1155, Ownable, ERC1155Burnable, ERC1155Pausable, ERC1155Supply {
     // 代币类型计数器
     uint256 private _tokenIds;
     
@@ -38,9 +44,9 @@ contract RWA1155 is ERC1155, Ownable {
     
     // 事件
     event TokenCreated(
-        uint256 indexed tokenId, 
-        string name, 
-        string symbol, 
+        uint256 indexed tokenId,
+        string name,
+        string symbol,
         address indexed creator
     );
     event WhitelistUpdated(address indexed account, bool status);
@@ -76,7 +82,7 @@ contract RWA1155 is ERC1155, Ownable {
         bool isBurnable,
         bool isTransferable,
         bytes memory data
-    ) external onlyOwner returns (uint256) {
+    ) external onlyOwner whenNotPaused returns (uint256) {
         _tokenIds++;
         uint256 tokenId = _tokenIds;
         
@@ -109,7 +115,7 @@ contract RWA1155 is ERC1155, Ownable {
         uint256[] memory tokenIds,
         uint256[] memory amounts,
         bytes memory data
-    ) external onlyOwner {
+    ) external onlyOwner whenNotPaused {
         for (uint256 i = 0; i < tokenIds.length; i++) {
             uint256 tokenId = tokenIds[i];
             require(tokenInfos[tokenId].isMintable, "Token not mintable");
@@ -128,7 +134,7 @@ contract RWA1155 is ERC1155, Ownable {
         address account,
         uint256[] memory tokenIds,
         uint256[] memory amounts
-    ) external onlyOwner {
+    ) public override onlyOwner {
         for (uint256 i = 0; i < tokenIds.length; i++) {
             uint256 tokenId = tokenIds[i];
             require(tokenInfos[tokenId].isBurnable, "Token not burnable");
@@ -170,6 +176,20 @@ contract RWA1155 is ERC1155, Ownable {
         _setURI(newURI);
         emit BaseURIUpdated(newURI);
     }
+
+    /**
+     * @dev 暂停合约
+     */
+    function pause() external onlyOwner {
+        _pause();
+    }
+
+    /**
+     * @dev 恢复合约
+     */
+    function unpause() external onlyOwner {
+        _unpause();
+    }
     
     /**
      * @dev 获取代币数量
@@ -206,18 +226,20 @@ contract RWA1155 is ERC1155, Ownable {
         address to,
         uint256[] memory ids,
         uint256[] memory amounts
-    ) internal override virtual {
-        
+    ) internal override(ERC1155, ERC1155Pausable, ERC1155Supply) virtual {
+        super._update(from, to, ids, amounts);
+
         for (uint256 i = 0; i < ids.length; i++) {
             uint256 tokenId = ids[i];
             require(tokenInfos[tokenId].isTransferable, "RWA1155: token is not transferable");
-            
-            // 检查白名单
-            bool whitelistCheck = _whitelist[from] || _whitelist[to] || 
-                                _tokenWhitelist[tokenId][from] || _tokenWhitelist[tokenId][to];
-            require(whitelistCheck, "RWA1155: transfer not allowed");
+
+            // 铸造操作(from = address(0))或销毁操作(to = address(0))不需要白名单检查
+            if (from != address(0) && to != address(0)) {
+                // 检查白名单
+                bool whitelistCheck = _whitelist[from] || _whitelist[to] ||
+                                    _tokenWhitelist[tokenId][from] || _tokenWhitelist[tokenId][to];
+                require(whitelistCheck, "RWA1155: transfer not allowed");
+            }
         }
-        
-        super._update(from, to, ids, amounts);
     }
 }

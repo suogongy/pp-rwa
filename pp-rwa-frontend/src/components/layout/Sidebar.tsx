@@ -3,23 +3,23 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { cn } from '@/lib/utils';
-import { 
-  Home, 
-  Token, 
-  Vote, 
-  Wallet, 
-  BarChart3, 
-  Settings, 
+import {
+  Home,
+  Coins,
+  Vote,
+  Wallet,
+  BarChart3,
+  Settings,
   FileText,
-  Staking,
-  NFT
+  TrendingUp,
+  Package
 } from 'lucide-react';
 
 const navigation = [
   { name: '首页', href: '/', icon: Home },
-  { name: '代币管理', href: '/tokens', icon: Token },
-  { name: 'NFT管理', href: '/nfts', icon: NFT },
-  { name: '质押系统', href: '/staking', icon: Staking },
+  { name: '代币管理', href: '/tokens', icon: Coins },
+  { name: 'NFT管理', href: '/nfts', icon: Package },
+  { name: '质押系统', href: '/staking', icon: TrendingUp },
   { name: '治理中心', href: '/governance', icon: Vote },
   { name: '多签钱包', href: '/multisig', icon: Wallet },
   { name: '数据分析', href: '/analytics', icon: BarChart3 },

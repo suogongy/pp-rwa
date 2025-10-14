@@ -8,6 +8,7 @@ import { GovernanceManagement } from '@/components/stage3/GovernanceManagement'
 import { MultisigManagement } from '@/components/stage3/MultisigManagement'
 import { OracleManagement } from '@/components/stage3/OracleManagement'
 import { ProxyManagement } from '@/components/stage3/ProxyManagement'
+import { ERC1155Management } from '@/components/stage3/ERC1155Management'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Button } from '@/components/ui/button'
@@ -239,32 +240,7 @@ export default function Stage3Page() {
                     </TabsContent>
                     
                     <TabsContent value="erc1155" className="mt-6">
-                      <Card>
-                        <CardHeader>
-                          <CardTitle>ERC-1155多代币</CardTitle>
-                          <CardDescription>同质化和非同质化代币统一管理</CardDescription>
-                        </CardHeader>
-                        <CardContent>
-                          <div className="space-y-4">
-                            <div className="grid grid-cols-2 gap-4">
-                              <div className="p-4 bg-indigo-50 rounded-lg">
-                                <h4 className="font-semibold text-indigo-900">代币类型</h4>
-                                <p className="text-2xl font-bold text-indigo-600">0</p>
-                                <p className="text-sm text-indigo-600">已创建类型</p>
-                              </div>
-                              <div className="p-4 bg-pink-50 rounded-lg">
-                                <h4 className="font-semibold text-pink-900">总余额</h4>
-                                <p className="text-2xl font-bold text-pink-600">0</p>
-                                <p className="text-sm text-pink-600">所有代币</p>
-                              </div>
-                            </div>
-                            <div className="space-y-2">
-                              <Button className="w-full">创建新代币类型</Button>
-                              <Button variant="outline" className="w-full">批量转账</Button>
-                            </div>
-                          </div>
-                        </CardContent>
-                      </Card>
+                      <ERC1155Management />
                     </TabsContent>
                     
                     <TabsContent value="proxy" className="mt-6">

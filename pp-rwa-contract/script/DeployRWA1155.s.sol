@@ -8,6 +8,14 @@ import "../src/RWA1155.sol";
  * @title DeployRWA1155
  * @dev RWA1155多代币合约独立部署脚本
  * 部署支持ERC-1155标准的多代币系统，支持同质化和非同质化代币
+ *
+ * 功能特点：
+ * - 支持批量转账和批量铸造
+ * - 灵活的代币属性配置（可铸造、可销毁、可转移）
+ * - 白名单控制机制
+ * - 暂停功能支持
+ * - URI管理
+ * - 供应量跟踪
  */
 contract DeployRWA1155 is Script {
     function run() external {

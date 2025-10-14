@@ -54,7 +54,7 @@ export async function POST(request: NextRequest) {
 
     // 转发请求到IPFS节点
     let body
-    let headers: Record<string, string> = {}
+    const headers: Record<string, string> = {}
     
     const contentType = request.headers.get('content-type')
     
