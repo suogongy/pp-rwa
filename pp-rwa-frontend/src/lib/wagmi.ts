@@ -1,4 +1,4 @@
-import { http, createConfig } from 'wagmi'
+import { http, createConfig, createStorage } from 'wagmi'
 import { sepolia } from 'wagmi/chains'
 import { injected } from 'wagmi/connectors'
 import { anvil } from 'viem/chains'
@@ -3912,8 +3912,13 @@ export const config = createConfig({
   connectors: [
     injected(),
   ],
+  ssr: false,
+  storage: createStorage({
+    storage: typeof window !== 'undefined' ? window.localStorage : undefined,
+    key: 'wagmi.wallet',
+  }),
   transports: {
-    [anvil.id]: http('http://127.0.0.1:8545'),
+    [anvil.id]: http(process.env.NEXT_PUBLIC_ANVIL_RPC_URL || 'http://127.0.0.1:8545'),
     [sepolia.id]: http(process.env.NEXT_PUBLIC_SEPOLIA_RPC_URL || 'https://sepolia.public-rpc.com'),
   },
 })
